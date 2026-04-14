@@ -1,9 +1,6 @@
-<script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
-</script>
-
 <template>
-  <main>
-    <TheWelcome />
-  </main>
+  <div>
+    <h1>ProSystem</h1>
+    <p>Welcome to ProSystem POS</p>
+  </div>
 </template>
