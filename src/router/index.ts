@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import AppLayout from '../components/layout/AppLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // Public route - no login required
+    // Public route - no layout
     {
       path: '/login',
       name: 'login',
@@ -12,39 +13,41 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
 
-    // Protected routes - login required
+    // Protected routes - with AppLayout
     {
       path: '/',
-      name: 'home',
-      component: () => import('../views/HomeView.vue'),
+      component: AppLayout,
       meta: { requiresAuth: true },
-    },
-    {
-      path: '/dashboard',
-      name: 'dashboard',
-      component: () => import('../views/DashboardView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/products',
-      name: 'products',
-      component: () => import('../views/products/ProductsView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/inventory',
-      name: 'inventory',
-      component: () => import('../views/inventory/InventoryView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/pos',
-      name: 'pos',
-      component: () => import('../views/pos/POSView.vue'),
-      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: () => import('../views/HomeView.vue'),
+        },
+        {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: () => import('../views/DashboardView.vue'),
+        },
+        {
+          path: 'products',
+          name: 'products',
+          component: () => import('../views/products/ProductsView.vue'),
+        },
+        {
+          path: 'inventory',
+          name: 'inventory',
+          component: () => import('../views/inventory/InventoryView.vue'),
+        },
+        {
+          path: 'pos',
+          name: 'pos',
+          component: () => import('../views/pos/POSView.vue'),
+        },
+      ],
     },
 
-    // Catch all - redirect unknown URLs to home
+    // Catch all
     {
       path: '/:pathMatch(.*)*',
       redirect: '/',
@@ -52,10 +55,8 @@ const router = createRouter({
   ],
 })
 
-// THE ROUTE GUARD - runs before every single route change
 router.beforeEach(async (to, _from) => {
   const authStore = useAuthStore()
-
   const requiresAuth = to.meta.requiresAuth !== false
 
   if (requiresAuth && !authStore.token) {
