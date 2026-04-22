@@ -1,5 +1,5 @@
 import api from './api'
-import type { ApiResponse, LoginRequest, LoginResponse } from '../types'
+import type { ApiResponse, LoginRequest, LoginResponse, User } from '../types'
 
 const authService = {
   async login(credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> {
@@ -7,8 +7,8 @@ const authService = {
     return response.data
   },
 
-  async getMe(): Promise<ApiResponse<{ user: import('../types').User }>> {
-    const response = await api.get<ApiResponse<{ user: import('../types').User }>>('/api/auth/me')
+  async getMe(): Promise<ApiResponse<User>> {
+    const response = await api.get<ApiResponse<User>>('/api/auth/me')
     return response.data
   },
 
