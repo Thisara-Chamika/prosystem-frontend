@@ -82,3 +82,24 @@ export interface PaginatedResponse<T> {
     limit: number
   }
 }
+
+export interface Inventory {
+  inventoryId: string
+  productId: string
+  shopId: string
+  quantity: number
+  reserved: number
+  reorderPoint: number
+  reorderQuantity: number
+  updatedAt: string
+}
+
+export interface ProductWithInventory extends Product {
+  inventory: Inventory | null
+}
+
+export interface UpdateInventoryRequest {
+  quantity: number
+  reorderPoint?: number
+  reorderQuantity?: number
+}
