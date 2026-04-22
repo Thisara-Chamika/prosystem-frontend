@@ -8,7 +8,7 @@ import AppSidebar from './AppSidebar.vue'
     <AppTopbar />
     <AppSidebar />
     <main class="main-content">
-      <RouterView />
+      <RouterView :key="$route.path" />
     </main>
   </div>
 </template>

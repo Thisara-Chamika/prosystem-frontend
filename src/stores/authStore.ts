@@ -50,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await authService.getMe()
       if (response.success) {
-        user.value = response.data.user
+        user.value = response.data
       }
     } catch {
       // Token invalid - clear everything
