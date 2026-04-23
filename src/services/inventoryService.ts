@@ -14,12 +14,12 @@ const inventoryService = {
     return response.data
   },
 
-  // PUT /api/products/:id/inventory — update stock quantity
+  // PATCH /api/products/:id/inventory — update stock quantity
   async updateInventory(
     productId: string,
     data: UpdateInventoryRequest,
-  ): Promise<ApiResponse<{ inventory: import('../types').Inventory }>> {
-    const response = await api.put(`/api/products/${productId}/inventory`, data)
+  ): Promise<ApiResponse<any>> {
+    const response = await api.patch(`/api/products/${productId}/inventory`, data)
     return response.data
   },
 }
