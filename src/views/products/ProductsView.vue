@@ -44,6 +44,7 @@ const form = ref<CreateProductRequest>({
   cost: 0,
   taxRate: 0,
   trackInventory: true,
+  initialStock: 0,
 })
 
 const categories = ref([
@@ -107,6 +108,7 @@ function openCreateDialog() {
     cost: 0,
     taxRate: 0,
     trackInventory: true,
+    initialStock: 0,
   }
   showDialog.value = true
 }
@@ -360,6 +362,12 @@ onMounted(() => {
         <div class="field">
           <label>Tax Rate (%)</label>
           <InputNumber v-model="form.taxRate" suffix="%" :min="0" :max="100" class="w-full" />
+        </div>
+
+        <!-- Row: Initial Stock (only show when creating) -->
+        <div class="field" v-if="dialogMode === 'create'">
+          <label>Initial Stock</label>
+          <InputNumber v-model="form.initialStock" :min="0" showButtons class="w-full" />
         </div>
 
         <!-- Row 6: Description -->

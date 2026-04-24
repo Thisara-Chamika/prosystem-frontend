@@ -59,6 +59,7 @@ export interface CreateProductRequest {
   cost?: number
   taxRate?: number
   trackInventory?: boolean
+  initialStock?: number
 }
 
 // What we send to update a product
