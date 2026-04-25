@@ -11,8 +11,8 @@ const posService = {
   },
 
   // GET /api/pos — get all transactions
-  async getTransactions(page = 1, limit = 10): Promise<any> {
-    const response = await api.get(`/api/pos?page=${page}&limit=${limit}`)
+  async getTransactions(page = 1, limit = 50): Promise<any> {
+    const response = await api.get(`/api/pos?page=${page}&limit=${limit}&_t=${Date.now()}`)
     return response.data
   },
 

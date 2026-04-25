@@ -112,9 +112,7 @@ async function loadDashboard() {
         .reduce((sum: number, t: any) => sum + parseFloat(t.total), 0)
 
       // Recent 5 transactions
-      recentTransactions.value = transactions
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 5)
+      recentTransactions.value = transactions.slice(0, 5)
     }
   } catch (error) {
     toast.add({
