@@ -104,3 +104,58 @@ export interface UpdateInventoryRequest {
   reorderPoint?: number
   reorderQuantity?: number
 }
+
+// Cart item — what's in the cart before checkout
+export interface CartItem {
+  productId: string
+  productName: string
+  productSku: string
+  price: number
+  taxRate: number
+  quantity: number
+  discount: number
+  availableStock: number
+}
+
+// Transaction item from backend
+export interface TransactionItem {
+  itemId: string
+  productId: string
+  productName: string
+  productSku: string
+  quantity: number
+  unitPrice: string
+  discount: string
+  total: string
+}
+
+// Full transaction
+export interface Transaction {
+  transactionId: string
+  transactionNumber: string
+  customerId: string | null
+  cashierId: string
+  subtotal: string
+  tax: string
+  discount: string
+  total: string
+  paymentMethod: 'cash' | 'card' | 'online' | 'mixed'
+  paymentStatus: string
+  status: string
+  notes: string | null
+  createdAt: string
+  items?: TransactionItem[]
+}
+
+// What we send to create a transaction
+export interface CreateTransactionRequest {
+  customerId?: string | null
+  paymentMethod: 'cash' | 'card' | 'online' | 'mixed'
+  discount?: number
+  notes?: string
+  items: {
+    productId: string
+    quantity: number
+    discount?: number
+  }[]
+}
