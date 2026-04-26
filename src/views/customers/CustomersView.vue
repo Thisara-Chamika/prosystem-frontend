@@ -94,12 +94,40 @@ function onPageChange(event: any) {
   loadCustomers()
 }
 
+// ── Validation ─────────────────────────────────────
+function validateEmail(email: string): boolean {
+  if (!email) return true // optional field
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+function validateSriLankanPhone(phone: string): boolean {
+  if (!phone) return true // optional field
+  // Accepts: 07XXXXXXXX or +947XXXXXXXX
+  const localFormat = /^07[0-9]{8}$/
+  const intlFormat = /^\+947[0-9]{8}$/
+  return localFormat.test(phone) || intlFormat.test(phone)
+}
+
+function validateCustomerForm(form: typeof newCustomer.value): string | null {
+  if (!form.firstName.trim()) return 'First name is required'
+  if (!form.lastName.trim()) return 'Last name is required'
+  if (form.email && !validateEmail(form.email)) {
+    return 'Please enter a valid email address'
+  }
+  if (form.phone && !validateSriLankanPhone(form.phone)) {
+    return 'Phone must be in format: 07XXXXXXXX or +947XXXXXXXX'
+  }
+  return null // no errors
+}
+
 async function saveCustomer() {
-  if (!newCustomer.value.firstName || !newCustomer.value.lastName) {
+  const validationError = validateCustomerForm(newCustomer.value)
+  if (validationError) {
     toast.add({
       severity: 'warn',
       summary: 'Required',
-      detail: 'First name and last name are required',
+      detail: validationError,
       life: 3000,
     })
     return
@@ -195,11 +223,12 @@ function openEditDialog(customer: Customer) {
 }
 
 async function updateCustomer() {
-  if (!editForm.value.firstName || !editForm.value.lastName) {
+  const validationError = validateCustomerForm(editForm.value)
+  if (validationError) {
     toast.add({
       severity: 'warn',
       summary: 'Required',
-      detail: 'First name and last name are required',
+      detail: validationError,
       life: 3000,
     })
     return
@@ -218,7 +247,22 @@ async function updateCustomer() {
         life: 3000,
       })
       showEditDialog.value = false
-      loadCustomers()
+
+      const index = customers.value.findIndex(
+        (c) => c.customerId === editingCustomer.value!.customerId,
+      )
+      if (index !== -1 && editingCustomer.value) {
+        customers.value[index] = {
+          customerId: editingCustomer.value.customerId,
+          shopId: editingCustomer.value.shopId,
+          createdAt: editingCustomer.value.createdAt,
+          firstName: editForm.value.firstName,
+          lastName: editForm.value.lastName,
+          email: editForm.value.email || null,
+          phone: editForm.value.phone || null,
+          address: editForm.value.address || null,
+        }
+      }
     }
   } catch (error: any) {
     toast.add({
@@ -353,9 +397,13 @@ onMounted(() => {
           </div>
         </div>
         <div class="field">
-          <label>Phone</label>
-          <InputText v-model="newCustomer.phone" placeholder="+94771234567" class="w-full" />
-        </div>
+      <label>Phone</label>
+      <InputText
+        v-model="newCustomer.phone"
+        placeholder="07XXXXXXXX or +947XXXXXXXX"
+        class="w-full"
+      />
+    </div>
         <div class="field">
           <label>Email</label>
           <InputText v-model="newCustomer.email" placeholder="email@example.com" class="w-full" />
@@ -391,9 +439,9 @@ onMounted(() => {
           </div>
         </div>
         <div class="field">
-          <label>Phone</label>
-          <InputText v-model="editForm.phone" placeholder="+94771234567" class="w-full" />
-        </div>
+      <label>Phone</label>
+      <InputText v-model="editForm.phone" placeholder="07XXXXXXXX or +947XXXXXXXX" class="w-full" />
+    </div>
         <div class="field">
           <label>Email</label>
           <InputText v-model="editForm.email" placeholder="email@example.com" class="w-full" />
@@ -596,6 +644,12 @@ onMounted(() => {
   font-size: 0.875rem;
   font-weight: 500;
   color: #cbd5e1;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.2rem;
 }
 
 /* Customer Detail */

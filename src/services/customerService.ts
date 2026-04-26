@@ -20,7 +20,7 @@ const customerService = {
   async getCustomers(page = 1, limit = 10, search = ''): Promise<any> {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
     const response = await api.get(
-      `/api/customers?page=${page}&limit=${limit}${searchParam}&_t=${Date.now()}`,
+      `/api/customers?page=${page}&limit=${limit}${searchParam}&sort=createdAt&order=desc&_t=${Date.now()}`,
     )
     return response.data
   },
