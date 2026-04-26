@@ -159,3 +159,22 @@ export interface CreateTransactionRequest {
     discount?: number
   }[]
 }
+
+export interface Customer {
+  customerId: string
+  shopId: string
+  firstName: string
+  lastName: string
+  email: string | null
+  phone: string | null
+  address: string | null
+  createdAt: string
+}
+
+export interface CreateCustomerRequest {
+  firstName: string
+  lastName: string
+  email?: string
+  phone?: string
+  address?: string
+}
