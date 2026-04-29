@@ -11,6 +11,11 @@ const menuItems = [
     route: '/dashboard',
   },
   {
+    label: 'Customers',
+    icon: 'pi pi-users',
+    route: '/customers',
+  },
+  {
     label: 'POS',
     icon: 'pi pi-shopping-cart',
     route: '/pos',

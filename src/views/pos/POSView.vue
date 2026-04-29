@@ -4,6 +4,9 @@ import productService from '../../services/productService'
 import posService from '../../services/posService'
 import type { CartItem, CreateTransactionRequest } from '../../types'
 import inventoryService from '../../services/inventoryService'
+import customerService from '../../services/customerService'
+import type { Customer, CreateCustomerRequest } from '../../types'
+import AutoComplete from 'primevue/autocomplete'
 
 // PrimeVue components
 import InputText from 'primevue/inputtext'
@@ -43,6 +46,21 @@ const paymentMethods = [
   { label: 'Online', value: 'online' },
   { label: 'Mixed', value: 'mixed' },
 ]
+
+// ── Customer State ─────────────────────────────────
+const selectedCustomer = ref<Customer | null>(null)
+const customerQuery = ref('')
+const customerSuggestions = ref<Customer[]>([])
+const showAddCustomerDialog = ref(false)
+const savingCustomer = ref(false)
+
+const newCustomer = ref<CreateCustomerRequest>({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  address: '',
+})
 
 // ── Computed — Cart Totals ─────────────────────────
 const subtotal = computed(() =>
@@ -208,6 +226,8 @@ function clearCart() {
   overallDiscount.value = 0
   notes.value = ''
   paymentMethod.value = 'cash'
+  selectedCustomer.value = null
+  customerQuery.value = ''
 }
 
 async function processCheckout() {
@@ -224,6 +244,7 @@ async function processCheckout() {
   processingCheckout.value = true
   try {
     const request: CreateTransactionRequest = {
+      customerId: selectedCustomer.value?.customerId ?? null,
       paymentMethod: paymentMethod.value,
       discount: overallDiscount.value,
       notes: notes.value || undefined,
@@ -259,6 +280,69 @@ async function processCheckout() {
     })
   } finally {
     processingCheckout.value = false
+  }
+}
+
+// ── Customer Methods ───────────────────────────────
+async function searchCustomers(event: any) {
+  const query = event.query?.trim()
+  if (!query) {
+    customerSuggestions.value = []
+    return
+  }
+  try {
+    const response = await customerService.searchCustomers(query)
+    if (response.success) {
+      customerSuggestions.value = response.data
+    }
+  } catch {
+    customerSuggestions.value = []
+  }
+}
+
+function onCustomerSelect(event: any) {
+  selectedCustomer.value = event.value
+  customerQuery.value = ''
+}
+
+function clearCustomer() {
+  selectedCustomer.value = null
+  customerQuery.value = ''
+}
+
+async function saveNewCustomer() {
+  if (!newCustomer.value.firstName || !newCustomer.value.lastName) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Required',
+      detail: 'First name and last name are required',
+      life: 3000,
+    })
+    return
+  }
+  savingCustomer.value = true
+  try {
+    const response = await customerService.createCustomer(newCustomer.value)
+    if (response.success) {
+      selectedCustomer.value = response.data
+      showAddCustomerDialog.value = false
+      newCustomer.value = { firstName: '', lastName: '', email: '', phone: '', address: '' }
+      toast.add({
+        severity: 'success',
+        summary: 'Customer Added',
+        detail: `${response.data.firstName} ${response.data.lastName} created and selected`,
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to create customer',
+      life: 3000,
+    })
+  } finally {
+    savingCustomer.value = false
   }
 }
 
@@ -328,6 +412,66 @@ onMounted(() => {
 
     <!-- Right Panel — Cart -->
     <div class="cart-panel">
+      <!-- Customer Section -->
+      <div class="customer-section">
+        <div class="customer-label">
+          <i class="pi pi-user" />
+          <span>Customer</span>
+          <span class="optional-tag">optional</span>
+        </div>
+
+        <!-- Selected customer display -->
+        <div class="selected-customer" v-if="selectedCustomer">
+          <div class="customer-info">
+            <i class="pi pi-check-circle customer-check" />
+            <div>
+              <span class="customer-name">
+                {{ selectedCustomer.firstName }} {{ selectedCustomer.lastName }}
+              </span>
+              <span class="customer-phone" v-if="selectedCustomer.phone">
+                {{ selectedCustomer.phone }}
+              </span>
+            </div>
+          </div>
+          <Button
+            icon="pi pi-times"
+            size="small"
+            severity="secondary"
+            text
+            @click="clearCustomer"
+          />
+        </div>
+
+        <!-- Search + Add when no customer selected -->
+        <div class="customer-search-row" v-else>
+          <AutoComplete
+            v-model="customerQuery"
+            :suggestions="customerSuggestions"
+            @complete="searchCustomers"
+            @item-select="onCustomerSelect"
+            :optionLabel="(c) => `${c.firstName} ${c.lastName}`"
+            placeholder="Search customer..."
+            class="customer-autocomplete"
+            :delay="300"
+          >
+            <template #option="{ option }">
+              <div class="customer-option">
+                <span class="option-name"> {{ option.firstName }} {{ option.lastName }} </span>
+                <span class="option-phone" v-if="option.phone">
+                  {{ option.phone }}
+                </span>
+              </div>
+            </template>
+          </AutoComplete>
+          <Button
+            icon="pi pi-plus"
+            size="small"
+            severity="secondary"
+            v-tooltip="'Add new customer'"
+            @click="showAddCustomerDialog = true"
+          />
+        </div>
+      </div>
       <!-- Cart Header -->
       <div class="cart-header">
         <span class="cart-title">
@@ -515,6 +659,48 @@ onMounted(() => {
               loadAllProducts()
             }
           "
+        />
+      </template>
+    </Dialog>
+    <!-- Add Customer Dialog -->
+    <Dialog
+      v-model:visible="showAddCustomerDialog"
+      header="Add New Customer"
+      :style="{ width: '420px' }"
+      modal
+    >
+      <div class="dialog-form">
+        <div class="form-row">
+          <div class="field">
+            <label>First Name *</label>
+            <InputText v-model="newCustomer.firstName" placeholder="First name" class="w-full" />
+          </div>
+          <div class="field">
+            <label>Last Name *</label>
+            <InputText v-model="newCustomer.lastName" placeholder="Last name" class="w-full" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <InputText v-model="newCustomer.phone" placeholder="+94771234567" class="w-full" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <InputText v-model="newCustomer.email" placeholder="email@example.com" class="w-full" />
+        </div>
+        <div class="field">
+          <label>Address</label>
+          <InputText v-model="newCustomer.address" placeholder="Optional address" class="w-full" />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showAddCustomerDialog = false" />
+        <Button
+          label="Add Customer"
+          icon="pi pi-check"
+          :loading="savingCustomer"
+          @click="saveNewCustomer"
         />
       </template>
     </Dialog>
@@ -913,5 +1099,130 @@ onMounted(() => {
 
 .w-full {
   width: 100% !important;
+}
+
+/* ── Customer Section ── */
+.customer-section {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.customer-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.optional-tag {
+  font-size: 0.7rem;
+  color: #475569;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.customer-search-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.customer-autocomplete {
+  flex: 1;
+}
+
+:deep(.customer-autocomplete input) {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+:deep(.p-autocomplete-option) {
+  padding: 0.5rem 0.75rem;
+}
+
+:deep(.p-autocomplete-list) {
+  padding: 0.25rem 0;
+}
+
+.selected-customer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+
+.customer-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.customer-check {
+  color: #22c55e;
+  font-size: 1rem;
+}
+
+.customer-name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.customer-phone {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.customer-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.option-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.option-phone {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Dialog form styles */
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #cbd5e1;
 }
 </style>
