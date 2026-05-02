@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { User } from '../types'
 import authService from '../services/authService'
 import router from '../router'
+import shopService from '../services/shopService'
 
 export const useAuthStore = defineStore('auth', () => {
   // STATE
@@ -77,7 +78,42 @@ export const useAuthStore = defineStore('auth', () => {
     userRole,
     // Actions
     login,
+    register,
     fetchCurrentUser,
     logout,
   }
+
+  async function register(data: {
+    shopName: string
+    shopSlug: string
+    firstName: string
+    lastName: string
+    email: string
+    password: string
+    currency: string
+    timezone: string
+  }) {
+    loading.value = true
+  error.value = null
+  try {
+    const response = await authService.register(data)
+    if (response.success) {
+      token.value = response.data.token
+      user.value = response.data.user
+      localStorage.setItem('token', response.data.token)
+      const shopResponse = await shopService.getShop()
+      if (shopResponse.success && !shopResponse.data.isOnboarded) {
+        router.push('/onboarding')
+      } else {
+        router.push('/dashboard')
+      }
+    } else {
+      error.value = response.message
+    }
+  } catch (err: any) {
+    error.value = err.response?.data?.message || 'Registration failed.'
+  } finally {
+    loading.value = false
+  }
+}
 })

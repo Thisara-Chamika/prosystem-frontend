@@ -12,7 +12,18 @@ const router = createRouter({
       component: () => import('../views/auth/LoginView.vue'),
       meta: { requiresAuth: false },
     },
-
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('../views/RegisterView.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/onboarding',
+      name: 'onboarding',
+      component: () => import('../views/onboarding/OnboardingView.vue'),
+      meta: { requiresAuth: true },
+    },
     // Protected routes - with AppLayout
     {
       path: '/',

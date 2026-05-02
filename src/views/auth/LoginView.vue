@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
+import { useRouter } from 'vue-router'
 
 // PrimeVue components
 import InputText from 'primevue/inputtext'
@@ -14,6 +15,7 @@ const authStore = useAuthStore()
 // When these change, the UI updates automatically
 const email = ref('')
 const password = ref('')
+const router = useRouter()
 
 async function handleLogin() {
   console.log('handleLogin called!', email.value, password.value)
@@ -81,6 +83,11 @@ async function handleLogin() {
           @click="handleLogin"
         />
       </div>
+
+      <p class="login-footer">
+        Don't have an account?
+        <span class="signup-link" @click="router.push('/register')"> Sign up </span>
+      </p>
 
       <p class="login-footer">ProSystem &copy; 2025 — All rights reserved</p>
     </div>
@@ -178,6 +185,17 @@ async function handleLogin() {
   color: #475569;
   font-size: 0.75rem;
   margin: 1.5rem 0 0;
+}
+
+.signup-link {
+  color: #3b82f6;
+  cursor: pointer;
+  font-weight: 500;
+  margin-left: 0.25rem;
+}
+
+.signup-link:hover {
+  text-decoration: underline;
 }
 
 /* Fix PrimeVue Password component width and icon position */
