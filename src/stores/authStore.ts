@@ -143,6 +143,10 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
+  function hasPlugin(pluginId: string): boolean {
+    return shop.value?.activePlugins?.includes(pluginId) ?? false
+  }
+
   // ─── RETURN ───────────────────────────────────────────
   return {
     user,
@@ -155,6 +159,7 @@ export const useAuthStore = defineStore('auth', () => {
     userRole,
     formatCurrency,
     formatDate,
+    hasPlugin,
     login,
     register,
     fetchCurrentUser,
