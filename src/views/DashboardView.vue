@@ -55,15 +55,6 @@ function getPaymentIcon(method: string) {
   }
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 async function loadDashboard() {
   loading.value = true
   try {
@@ -162,7 +153,9 @@ onMounted(() => {
             <i class="pi pi-dollar" />
           </div>
           <div class="stat-info">
-            <span class="stat-value">${{ todayRevenue.toFixed(2) }}</span>
+            <span class="stat-value"
+              ><span class="stat-value">{{ authStore.formatCurrency(todayRevenue) }}</span></span
+            >
             <span class="stat-label">Today's Revenue</span>
           </div>
         </div>
@@ -237,7 +230,7 @@ onMounted(() => {
 
           <Column header="Date" style="width: 20%">
             <template #body="{ data }">
-              {{ formatDate(data.createdAt) }}
+              {{ authStore.formatDate(data.createdAt) }}
             </template>
           </Column>
 
@@ -252,7 +245,11 @@ onMounted(() => {
 
           <Column header="Total" style="width: 12%">
             <template #body="{ data }">
-              <span class="amount"> ${{ parseFloat(data.total).toFixed(2) }} </span>
+              <span class="amount">
+                <span class="amount">{{
+                  authStore.formatCurrency(parseFloat(data.total))
+                }}</span></span
+              >
             </template>
           </Column>
 

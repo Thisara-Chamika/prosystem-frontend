@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import customerService from '../../services/customerService'
-import posService from '../../services/posService'
 import type { Customer } from '../../types'
+import { useAuthStore } from '../../stores/authStore'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -16,6 +16,7 @@ import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 
 const toast = useToast()
+const authStore = useAuthStore()
 
 // ── State ─────────────────────────────────────────
 const customers = ref<Customer[]>([])
@@ -180,16 +181,6 @@ async function viewCustomer(customer: Customer) {
   }
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function getStatusSeverity(status: string) {
   switch (status) {
     case 'completed':
@@ -207,7 +198,6 @@ function getTotalSpent() {
   return customerTransactions.value
     .filter((t) => t.status === 'completed')
     .reduce((sum, t) => sum + parseFloat(t.total), 0)
-    .toFixed(2)
 }
 
 function openEditDialog(customer: Customer) {
@@ -397,13 +387,13 @@ onMounted(() => {
           </div>
         </div>
         <div class="field">
-      <label>Phone</label>
-      <InputText
-        v-model="newCustomer.phone"
-        placeholder="07XXXXXXXX or +947XXXXXXXX"
-        class="w-full"
-      />
-    </div>
+          <label>Phone</label>
+          <InputText
+            v-model="newCustomer.phone"
+            placeholder="07XXXXXXXX or +947XXXXXXXX"
+            class="w-full"
+          />
+        </div>
         <div class="field">
           <label>Email</label>
           <InputText v-model="newCustomer.email" placeholder="email@example.com" class="w-full" />
@@ -439,9 +429,13 @@ onMounted(() => {
           </div>
         </div>
         <div class="field">
-      <label>Phone</label>
-      <InputText v-model="editForm.phone" placeholder="07XXXXXXXX or +947XXXXXXXX" class="w-full" />
-    </div>
+          <label>Phone</label>
+          <InputText
+            v-model="editForm.phone"
+            placeholder="07XXXXXXXX or +947XXXXXXXX"
+            class="w-full"
+          />
+        </div>
         <div class="field">
           <label>Email</label>
           <InputText v-model="editForm.email" placeholder="email@example.com" class="w-full" />
@@ -498,7 +492,9 @@ onMounted(() => {
             <i class="pi pi-calendar" />
             <div>
               <span class="detail-label">Customer Since</span>
-              <span class="detail-value">{{ formatDate(selectedCustomer.createdAt) }}</span>
+              <span class="detail-value">{{
+                authStore.formatDate(selectedCustomer.createdAt)
+              }}</span>
             </div>
           </div>
         </div>
@@ -510,7 +506,9 @@ onMounted(() => {
             <span class="txn-summary-label">Total Transactions</span>
           </div>
           <div class="txn-summary-card green">
-            <span class="txn-summary-value">${{ getTotalSpent() }}</span>
+            <span class="txn-summary-value">{{
+              authStore.formatCurrency(parseFloat(getTotalSpent()))
+            }}</span>
             <span class="txn-summary-label">Total Spent</span>
           </div>
         </div>
@@ -532,10 +530,10 @@ onMounted(() => {
           <div v-else v-for="txn in customerTransactions" :key="txn.transactionId" class="txn-item">
             <div class="txn-item-left">
               <span class="txn-number">{{ txn.transactionNumber }}</span>
-              <span class="txn-date">{{ formatDate(txn.createdAt) }}</span>
+              <span class="txn-date">{{ authStore.formatDate(txn.createdAt) }}</span>
             </div>
             <div class="txn-item-right">
-              <span class="txn-total">${{ parseFloat(txn.total).toFixed(2) }}</span>
+              <span class="txn-total">{{ authStore.formatCurrency(parseFloat(txn.total)) }}</span>
               <Tag :value="txn.status" :severity="getStatusSeverity(txn.status)" />
             </div>
           </div>
