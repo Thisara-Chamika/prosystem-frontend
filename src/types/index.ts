@@ -178,3 +178,44 @@ export interface CreateCustomerRequest {
   phone?: string
   address?: string
 }
+
+// Shop data
+export interface Shop {
+  shopId: string
+  name: string
+  slug: string
+  currency: string
+  timezone: string
+  activePlugins: string[]
+  configuration: Record<string, any>
+  isOnboarded: boolean
+}
+
+// Register request
+export interface RegisterRequest {
+  shopName: string
+  shopSlug: string
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  currency?: string
+  timezone?: string
+}
+
+// Plugin info
+export interface PluginInfo {
+  id: string
+  name: string
+  description: string
+  icon: string
+  active: boolean
+}
+
+// Business type
+export interface BusinessType {
+  id: string
+  name: string
+  icon: string
+  description: string
+}

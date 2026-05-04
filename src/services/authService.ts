@@ -15,6 +15,21 @@ const authService = {
   logout(): void {
     localStorage.removeItem('token')
   },
+
+  // POST /api/auth/register
+  async register(data: {
+    shopName: string
+    shopSlug: string
+    firstName: string
+    lastName: string
+    email: string
+    password: string
+    currency?: string
+    timezone?: string
+  }): Promise<ApiResponse<LoginResponse>> {
+    const response = await api.post<ApiResponse<LoginResponse>>('/api/auth/register', data)
+    return response.data
+  },
 }
 
 export default authService
