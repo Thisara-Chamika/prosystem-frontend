@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import productService from '../../services/productService'
 import type { Product, CreateProductRequest, UpdateProductRequest } from '../../types'
+import { useAuthStore } from '../../stores/authStore'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -19,6 +20,7 @@ import Toast from 'primevue/toast'
 
 const confirm = useConfirm()
 const toast = useToast()
+const authStore = useAuthStore()
 
 // ── State ─────────────────────────────────────────
 const products = ref<Product[]>([])
@@ -89,8 +91,6 @@ async function loadProducts() {
       life: 3000,
     })
   } finally {
-    loading.value = true
-    console.log('Finally block reached')
     loading.value = false
   }
 }
@@ -265,7 +265,7 @@ onMounted(() => {
         </Column>
         <Column field="price" header="Price" style="width: 10%">
           <template #body="{ data }">
-            <span>${{ parseFloat(data.price).toFixed(2) }}</span>
+            <span>{{ authStore.formatCurrency(parseFloat(data.price)) }}</span>
           </template>
         </Column>
         <Column field="taxRate" header="Tax %" style="width: 10%">
@@ -350,11 +350,21 @@ onMounted(() => {
         <div class="form-row">
           <div class="field">
             <label>Price *</label>
-            <InputNumber v-model="form.price" mode="currency" currency="USD" class="w-full" />
+            <InputNumber
+              v-model="form.price"
+              mode="currency"
+              :currency="authStore.shop?.currency || 'USD'"
+              class="w-full"
+            />
           </div>
           <div class="field">
             <label>Cost</label>
-            <InputNumber v-model="form.cost" mode="currency" currency="USD" class="w-full" />
+            <InputNumber
+              v-model="form.cost"
+              mode="currency"
+              :currency="authStore.shop?.currency || 'USD'"
+              class="w-full"
+            />
           </div>
         </div>
 

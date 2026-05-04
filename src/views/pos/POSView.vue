@@ -6,7 +6,7 @@ import type { CartItem, CreateTransactionRequest } from '../../types'
 import inventoryService from '../../services/inventoryService'
 import customerService from '../../services/customerService'
 import type { Customer, CreateCustomerRequest } from '../../types'
-import AutoComplete from 'primevue/autocomplete'
+import { useAuthStore } from '../../stores/authStore'
 
 // PrimeVue components
 import InputText from 'primevue/inputtext'
@@ -19,6 +19,7 @@ import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
+import AutoComplete from 'primevue/autocomplete'
 
 const toast = useToast()
 
@@ -39,6 +40,7 @@ const processingCheckout = ref(false)
 // ── Receipt Dialog ─────────────────────────────────
 const showReceipt = ref(false)
 const lastTransaction = ref<any>(null)
+const authStore = useAuthStore()
 
 const paymentMethods = [
   { label: 'Cash', value: 'cash' },
@@ -394,7 +396,9 @@ onMounted(() => {
           <div class="product-card-info">
             <span class="product-card-name">{{ product.name }}</span>
             <span class="product-card-sku">{{ product.sku }}</span>
-            <span class="product-card-price"> ${{ parseFloat(product.price).toFixed(2) }} </span>
+            <span class="product-card-price">
+              {{ authStore.formatCurrency(parseFloat(product.price)) }}
+            </span>
           </div>
         </div>
 
@@ -521,7 +525,9 @@ onMounted(() => {
             />
           </div>
 
-          <div class="cart-item-total">${{ (item.price * item.quantity).toFixed(2) }}</div>
+          <div class="cart-item-total">
+            {{ authStore.formatCurrency(item.price * item.quantity) }}
+          </div>
 
           <Button
             icon="pi pi-times"
@@ -537,11 +543,11 @@ onMounted(() => {
       <div class="cart-totals">
         <div class="total-row">
           <span>Subtotal</span>
-          <span>${{ subtotal.toFixed(2) }}</span>
+          <span>{{ authStore.formatCurrency(subtotal) }}</span>
         </div>
         <div class="total-row">
           <span>Tax</span>
-          <span>${{ taxAmount.toFixed(2) }}</span>
+          <span>{{ authStore.formatCurrency(taxAmount) }}</span>
         </div>
         <div class="total-row">
           <span>Discount</span>
@@ -559,7 +565,7 @@ onMounted(() => {
         </div>
         <div class="total-row grand-total">
           <span>Total</span>
-          <span>${{ totalAmount.toFixed(2) }}</span>
+          <span>{{ authStore.formatCurrency(totalAmount) }}</span>
         </div>
       </div>
 
@@ -621,26 +627,32 @@ onMounted(() => {
         <div class="receipt-items">
           <div v-for="item in lastTransaction.items" :key="item.itemId" class="receipt-item">
             <span>{{ item.productName }} x{{ item.quantity }}</span>
-            <span>${{ parseFloat(item.total).toFixed(2) }}</span>
+            <span>{{ authStore.formatCurrency(parseFloat(item.total)) }}</span>
           </div>
         </div>
 
         <div class="receipt-totals">
           <div class="receipt-row">
             <span>Subtotal</span>
-            <span>${{ parseFloat(lastTransaction.transaction.subtotal).toFixed(2) }}</span>
+            <span>{{
+              authStore.formatCurrency(parseFloat(lastTransaction.transaction.subtotal))
+            }}</span>
           </div>
           <div class="receipt-row">
             <span>Tax</span>
-            <span>${{ parseFloat(lastTransaction.transaction.tax).toFixed(2) }}</span>
+            <span>{{ authStore.formatCurrency(parseFloat(lastTransaction.transaction.tax)) }}</span>
           </div>
           <div class="receipt-row">
             <span>Discount</span>
-            <span>-${{ parseFloat(lastTransaction.transaction.discount).toFixed(2) }}</span>
+            <span>{{
+              authStore.formatCurrency(parseFloat(lastTransaction.transaction.discount))
+            }}</span>
           </div>
           <div class="receipt-row grand">
             <span>Total Paid</span>
-            <span>${{ parseFloat(lastTransaction.transaction.total).toFixed(2) }}</span>
+            <span>{{
+              authStore.formatCurrency(parseFloat(lastTransaction.transaction.total))
+            }}</span>
           </div>
           <div class="receipt-row">
             <span>Payment Method</span>

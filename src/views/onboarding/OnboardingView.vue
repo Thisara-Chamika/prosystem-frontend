@@ -8,7 +8,9 @@ import Toast from 'primevue/toast'
 import BusinessTypeStep from './steps/BusinessTypeStep.vue'
 import PluginsStep from './steps/PluginsStep.vue'
 import ConfigureStep from './steps/ConfigureStep.vue'
+import { useAuthStore } from '../../stores/authStore'
 
+const authStore = useAuthStore()
 const router = useRouter()
 const toast = useToast()
 
@@ -102,6 +104,7 @@ async function onFinishSetup(config: typeof configuration.value) {
 
     // Complete onboarding
     await shopService.completeOnboarding()
+    await authStore.fetchCurrentUser()
 
     toast.add({
       severity: 'success',
