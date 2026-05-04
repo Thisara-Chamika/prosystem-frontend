@@ -42,12 +42,23 @@ const showReceipt = ref(false)
 const lastTransaction = ref<any>(null)
 const authStore = useAuthStore()
 
-const paymentMethods = [
-  { label: 'Cash', value: 'cash' },
-  { label: 'Card', value: 'card' },
-  { label: 'Online', value: 'online' },
-  { label: 'Mixed', value: 'mixed' },
-]
+const paymentMethods = computed(() => {
+  const methods = [{ label: 'Cash', value: 'cash' }]
+
+  if (authStore.hasPlugin('card-payments')) {
+    methods.push({ label: 'Card', value: 'card' })
+  }
+
+  if (authStore.hasPlugin('online-payments')) {
+    methods.push({ label: 'Online', value: 'online' })
+  }
+
+  if (authStore.hasPlugin('card-payments') && authStore.hasPlugin('online-payments')) {
+    methods.push({ label: 'Mixed', value: 'mixed' })
+  }
+
+  return methods
+})
 
 // ── Customer State ─────────────────────────────────
 const selectedCustomer = ref<Customer | null>(null)
