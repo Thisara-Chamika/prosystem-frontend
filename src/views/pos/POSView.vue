@@ -1103,11 +1103,11 @@ onMounted(() => {
 
 .receipt-header h3 {
   margin: 0 0 0.25rem;
-  color: #f1f5f9;
+  color: #1e293b;
 }
 
 .txn-number {
-  color: #94a3b8;
+  color: #475569;
   font-size: 0.875rem;
   margin: 0;
 }
@@ -1138,15 +1138,15 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 0.875rem;
-  color: #94a3b8;
+  color: #475569;
 }
 
 .receipt-row.grand {
   font-size: 1rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: #1e293b;
   padding-top: 0.5rem;
-  border-top: 1px solid #334155;
+  border-top: 1px solid #cbd5e1;
 }
 
 .w-full {
