@@ -7,6 +7,7 @@ import inventoryService from '../../services/inventoryService'
 import customerService from '../../services/customerService'
 import type { Customer, CreateCustomerRequest } from '../../types'
 import { useAuthStore } from '../../stores/authStore'
+import CashPaymentDialog from './CashPaymentDialog.vue'
 
 // PrimeVue components
 import InputText from 'primevue/inputtext'
@@ -39,6 +40,9 @@ const processingCheckout = ref(false)
 
 // ── Receipt Dialog ─────────────────────────────────
 const showReceipt = ref(false)
+// ── Cash Payment Dialog ────────────────────────────
+const showCashDialog = ref(false)
+
 const lastTransaction = ref<any>(null)
 const authStore = useAuthStore()
 
@@ -359,6 +363,24 @@ async function saveNewCustomer() {
   }
 }
 
+function handlePayment() {
+  if (cart.value.length === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Empty Cart',
+      detail: 'Please add items to cart first',
+      life: 3000,
+    })
+    return
+  }
+
+  if (paymentMethod.value === 'cash') {
+    showCashDialog.value = true
+  } else {
+    processCheckout()
+  }
+}
+
 onMounted(() => {
   loadAllProducts()
 })
@@ -565,7 +587,7 @@ onMounted(() => {
           <div class="discount-input">
             <InputNumber
               v-model="overallDiscount"
-              prefix="$"
+              :prefix="authStore.shop?.currency ? authStore.shop.currency + ' ' : '$ '"
               :min="0"
               :max="subtotal"
               :minFractionDigits="2"
@@ -617,7 +639,7 @@ onMounted(() => {
         :disabled="cart.length === 0"
         class="checkout-btn w-full"
         size="large"
-        @click="processCheckout"
+        @click="handlePayment"
       />
     </div>
 
@@ -727,6 +749,13 @@ onMounted(() => {
         />
       </template>
     </Dialog>
+
+    <!-- Cash Payment Dialog -->
+    <CashPaymentDialog
+      v-model:visible="showCashDialog"
+      :totalAmount="totalAmount"
+      @confirm="processCheckout"
+    />
   </div>
 </template>
 
