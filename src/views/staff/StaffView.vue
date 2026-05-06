@@ -177,7 +177,8 @@ async function saveStaff() {
         life: 3000,
       })
       showAddDialog.value = false
-      loadStaff()
+      staff.value = [response.data, ...staff.value]
+      totalRecords.value++
     }
   } catch (error: any) {
     toast.add({
@@ -249,7 +250,10 @@ function confirmDeactivate(member: Staff) {
           detail: `${member.firstName} ${member.lastName} has been deactivated`,
           life: 3000,
         })
-        loadStaff()
+        const index = staff.value.findIndex((s) => s.userId === member.userId)
+        if (index !== -1) {
+          staff.value[index] = { ...staff.value[index], isActive: false } as Staff
+        }
       } catch (error: any) {
         toast.add({
           severity: 'error',
