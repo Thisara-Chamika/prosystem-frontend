@@ -60,6 +60,11 @@ const router = createRouter({
           name: 'customers',
           component: () => import('../views/customers/CustomersView.vue'),
         },
+        {
+          path: 'staff',
+          name: 'staff',
+          component: () => import('../views/staff/StaffView.vue'),
+        },
       ],
     },
 

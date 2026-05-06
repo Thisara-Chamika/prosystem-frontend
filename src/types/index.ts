@@ -219,3 +219,39 @@ export interface BusinessType {
   icon: string
   description: string
 }
+
+// Staff member
+export interface Staff {
+  userId: string
+  shopId: string
+  firstName: string
+  lastName: string
+  email: string
+  role: 'shop_manager' | 'cashier'
+  phone: string | null
+  isActive: boolean
+  lastLogin: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// What we send to create a staff member
+export interface CreateStaffRequest {
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  role: 'shop_manager' | 'cashier'
+  phone?: string
+}
+
+// What we send to update a staff member
+export interface UpdateStaffRequest {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  password?: string
+  role?: 'shop_manager' | 'cashier'
+  isActive?: boolean
+}
