@@ -255,3 +255,63 @@ export interface UpdateStaffRequest {
   role?: 'shop_manager' | 'cashier'
   isActive?: boolean
 }
+
+// Transaction status type
+export type TransactionStatus =
+  | 'completed'
+  | 'partial_refund'
+  | 'refunded'
+  | 'cancelled'
+  | 'pending'
+
+// Return item request
+export interface ReturnItemRequest {
+  productId: string
+  transactionItemId: string
+  quantity: number
+  reason?: string
+}
+
+// Return request
+export interface ProcessReturnRequest {
+  reason?: string
+  refundMethod: 'cash' | 'card' | 'store_credit'
+  approvedBy?: string | null
+  items: ReturnItemRequest[]
+}
+
+// Return response
+export interface ReturnResponse {
+  return: {
+    returnId: string
+    transactionId: string
+    returnedBy: string
+    reason: string | null
+    refundMethod: string
+    totalRefund: string
+    status: string
+    createdAt: string
+  }
+  items: {
+    returnItemId: string
+    productId: string
+    transactionItemId: string
+    quantity: number
+    unitPrice: string
+    total: string
+    reason: string | null
+  }[]
+  transactionStatus: string
+  totalRefund: string
+  refundMethod: string
+  approvedBy: string | null
+}
+
+// Manager for approval
+export interface Manager {
+  userId: string
+  firstName: string
+  lastName: string
+  role: 'shop_owner' | 'shop_manager'
+  hasPin: boolean
+}
