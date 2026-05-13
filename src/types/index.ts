@@ -124,6 +124,8 @@ export interface TransactionItem {
   productName: string
   productSku: string
   quantity: number
+  returnedQuantity: number
+  availableToReturn: number
   unitPrice: string
   discount: string
   total: string
@@ -145,6 +147,7 @@ export interface Transaction {
   notes: string | null
   createdAt: string
   items?: TransactionItem[]
+  returns?: ReturnRecord[]
 }
 
 // What we send to create a transaction
@@ -314,4 +317,21 @@ export interface Manager {
   lastName: string
   role: 'shop_owner' | 'shop_manager'
   hasPin: boolean
+}
+
+// return record in transaction detail
+export interface ReturnRecord {
+  returnId: string
+  reason: string | null
+  refundMethod: string
+  totalRefund: string
+  createdAt: string
+  returnedBy: string
+  approvedBy: string | null
+  items: {
+    productName: string
+    transactionItemId: string
+    quantity: number
+    total: string
+  }[]
 }
