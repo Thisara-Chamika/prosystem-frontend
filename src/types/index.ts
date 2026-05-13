@@ -124,6 +124,8 @@ export interface TransactionItem {
   productName: string
   productSku: string
   quantity: number
+  returnedQuantity: number
+  availableToReturn: number
   unitPrice: string
   discount: string
   total: string
@@ -145,6 +147,7 @@ export interface Transaction {
   notes: string | null
   createdAt: string
   items?: TransactionItem[]
+  returns?: ReturnRecord[]
 }
 
 // What we send to create a transaction
@@ -254,4 +257,81 @@ export interface UpdateStaffRequest {
   password?: string
   role?: 'shop_manager' | 'cashier'
   isActive?: boolean
+}
+
+// Transaction status type
+export type TransactionStatus =
+  | 'completed'
+  | 'partial_refund'
+  | 'refunded'
+  | 'cancelled'
+  | 'pending'
+
+// Return item request
+export interface ReturnItemRequest {
+  productId: string
+  transactionItemId: string
+  quantity: number
+  reason?: string
+}
+
+// Return request
+export interface ProcessReturnRequest {
+  reason?: string
+  refundMethod: 'cash' | 'card' | 'store_credit'
+  approvedBy?: string | null
+  items: ReturnItemRequest[]
+}
+
+// Return response
+export interface ReturnResponse {
+  return: {
+    returnId: string
+    transactionId: string
+    returnedBy: string
+    reason: string | null
+    refundMethod: string
+    totalRefund: string
+    status: string
+    createdAt: string
+  }
+  items: {
+    returnItemId: string
+    productId: string
+    transactionItemId: string
+    quantity: number
+    unitPrice: string
+    total: string
+    reason: string | null
+  }[]
+  transactionStatus: string
+  totalRefund: string
+  refundMethod: string
+  approvedBy: string | null
+}
+
+// Manager for approval
+export interface Manager {
+  userId: string
+  firstName: string
+  lastName: string
+  role: 'shop_owner' | 'shop_manager'
+  hasPin: boolean
+}
+
+// return record in transaction detail
+export interface ReturnRecord {
+  returnId: string
+  reason: string | null
+  refundMethod: string
+  totalRefund: string
+  createdAt: string
+  returnedBy: string
+  approvedBy: string | null
+  items: {
+    productName: string
+    transactionItemId: string
+    quantity: number
+    total: string
+  }[]
 }
