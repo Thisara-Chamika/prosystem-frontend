@@ -8,6 +8,7 @@ import customerService from '../../services/customerService'
 import type { Customer, CreateCustomerRequest } from '../../types'
 import { useAuthStore } from '../../stores/authStore'
 import CashPaymentDialog from './CashPaymentDialog.vue'
+import ReturnLookupPanel from './ReturnLookupPanel.vue'
 
 // PrimeVue components
 import InputText from 'primevue/inputtext'
@@ -42,6 +43,8 @@ const processingCheckout = ref(false)
 const showReceipt = ref(false)
 // ── Cash Payment Dialog ────────────────────────────
 const showCashDialog = ref(false)
+// ── Return Lookup ──────────────────────────────────
+const showReturnLookup = ref(false)
 
 const lastTransaction = ref<any>(null)
 const authStore = useAuthStore()
@@ -631,6 +634,15 @@ onMounted(() => {
         <InputText v-model="notes" placeholder="Add notes (optional)..." class="w-full" />
       </div>
 
+      <!-- Return Button -->
+      <Button
+        label="Process Return"
+        icon="pi pi-replay"
+        severity="danger"
+        class="return-btn w-full"
+        @click="showReturnLookup = true"
+      />
+
       <!-- Checkout Button -->
       <Button
         label="Process Payment"
@@ -756,6 +768,9 @@ onMounted(() => {
       :totalAmount="totalAmount"
       @confirm="processCheckout"
     />
+
+    <!-- Return Lookup Panel -->
+    <ReturnLookupPanel v-if="showReturnLookup" @close="showReturnLookup = false" />
   </div>
 </template>
 
@@ -1080,6 +1095,10 @@ onMounted(() => {
   height: 48px;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.return-btn {
+  margin: 0 1.25rem 0.5rem;
 }
 
 /* ── Receipt ── */

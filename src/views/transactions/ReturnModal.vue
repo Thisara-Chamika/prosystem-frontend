@@ -23,7 +23,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  success: []
+  success: [result: any]
 }>()
 
 // ── Types ─────────────────────────────────────────
@@ -157,7 +157,7 @@ function onApprovalSuccess(managerId: string) {
 
 function onReturnSuccessDone() {
   showSuccessDialog.value = false
-  emit('success')
+  emit('success', returnResult.value)
 }
 </script>
 

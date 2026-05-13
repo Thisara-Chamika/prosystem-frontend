@@ -51,6 +51,14 @@ const posService = {
     const response = await api.post(`/api/transactions/${transactionId}/return`, data)
     return response.data
   },
+
+  // GET /api/pos/return-lookup
+  async returnLookup(search: string): Promise<any> {
+    const response = await api.get('/api/pos/return-lookup', {
+      params: { search },
+    })
+    return response.data
+  },
 }
 
 export default posService
