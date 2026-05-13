@@ -116,9 +116,7 @@ function onReturnProcessed() {
 }
 
 function getProductName(transactionItemId: string): string {
-  const item = transaction.value?.items?.find(
-    i => i.itemId === transactionItemId
-  )
+  const item = transaction.value?.items?.find((i) => i.itemId === transactionItemId)
   return item?.productName || 'Unknown Product'
 }
 
