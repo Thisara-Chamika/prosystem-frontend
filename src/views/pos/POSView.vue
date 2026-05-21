@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import productService from '../../services/productService'
 import posService from '../../services/posService'
 import type { CartItem, CreateTransactionRequest } from '../../types'
@@ -24,6 +25,7 @@ import InputIcon from 'primevue/inputicon'
 import AutoComplete from 'primevue/autocomplete'
 
 const toast = useToast()
+const route = useRoute()
 
 // ── Product Search State ───────────────────────────
 const searchQuery = ref('')
@@ -386,6 +388,9 @@ function handlePayment() {
 
 onMounted(() => {
   loadAllProducts()
+  if (route.query.return === 'true') {
+    showReturnLookup.value = true
+  }
 })
 </script>
 

@@ -59,6 +59,12 @@ const posService = {
     })
     return response.data
   },
+
+  // GET /api/dashboard/cashier-summary
+  async getCashierSummary(): Promise<any> {
+    const response = await api.get('/api/dashboard/cashier-summary')
+    return response.data
+  },
 }
 
 export default posService
