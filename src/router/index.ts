@@ -70,6 +70,11 @@ const router = createRouter({
           name: 'transactions',
           component: () => import('../views/transactions/TransactionsView.vue'),
         },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('../views/profile/ProfileView.vue'),
+        },
       ],
     },
 
