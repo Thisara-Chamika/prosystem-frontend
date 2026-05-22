@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { useAuthStore } from '../../stores/authStore'
+import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 
 const authStore = useAuthStore()
+const router = useRouter()
 </script>
 
 <template>
@@ -15,7 +17,7 @@ const authStore = useAuthStore()
 
     <!-- Right side - User info + Logout -->
     <div class="topbar-right">
-      <div class="user-info">
+      <div class="user-info" @click="router.push('/profile')" title="My Profile">
         <i class="pi pi-user" />
         <span class="user-name">{{ authStore.userFullName }}</span>
         <span class="user-role">{{ authStore.userRole }}</span>
@@ -76,6 +78,15 @@ const authStore = useAuthStore()
   gap: 0.5rem;
   color: #94a3b8;
   font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.user-info:hover {
+  background: #334155;
+  color: #f1f5f9;
 }
 
 .user-name {

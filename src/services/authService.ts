@@ -49,6 +49,31 @@ const authService = {
     const response = await api.get('/api/auth/managers')
     return response.data
   },
+
+  // PUT /api/auth/profile
+  async updateProfile(data: {
+    firstName?: string
+    lastName?: string
+    phone?: string
+  }): Promise<ApiResponse<User>> {
+    const response = await api.put('/api/auth/profile', data)
+    return response.data
+  },
+
+  // PUT /api/auth/password
+  async changePassword(data: {
+    currentPassword: string
+    newPassword: string
+  }): Promise<ApiResponse<null>> {
+    const response = await api.put('/api/auth/password', data)
+    return response.data
+  },
+
+  // PUT /api/auth/manager-pin
+  async setManagerPin(pin: string): Promise<ApiResponse<null>> {
+    const response = await api.put('/api/auth/manager-pin', { pin })
+    return response.data
+  },
 }
 
 export default authService
