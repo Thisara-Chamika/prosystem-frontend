@@ -22,6 +22,7 @@ const menuItems = computed(() => {
 
   if (authStore.userRole === 'shop_owner') {
     items.push({ label: 'Staff', icon: 'pi pi-id-card', route: '/staff' })
+    items.push({ label: 'Settings', icon: 'pi pi-cog', route: '/settings' })
   }
 
   return items
