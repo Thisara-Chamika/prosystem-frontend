@@ -18,6 +18,7 @@ const menuItems = computed(() => {
 
   if (authStore.userRole === 'shop_owner' || authStore.userRole === 'shop_manager') {
     items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
+    items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })
   }
 
   if (authStore.userRole === 'shop_owner') {
