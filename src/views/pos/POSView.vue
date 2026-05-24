@@ -640,24 +640,25 @@ onMounted(() => {
       </div>
 
       <!-- Return Button -->
-      <Button
-        label="Process Return"
-        icon="pi pi-replay"
-        severity="danger"
-        class="return-btn w-full"
-        @click="showReturnLookup = true"
-      />
-
-      <!-- Checkout Button -->
-      <Button
-        label="Process Payment"
-        icon="pi pi-check-circle"
-        :loading="processingCheckout"
-        :disabled="cart.length === 0"
-        class="checkout-btn w-full"
-        size="large"
-        @click="handlePayment"
-      />
+      <div class="action-buttons">
+        <Button
+          label="Return"
+          icon="pi pi-replay"
+          severity="danger"
+          class="return-btn"
+          @click="showReturnLookup = true"
+        />
+        <!-- Checkout Button -->
+        <Button
+          label="Process Payment"
+          icon="pi pi-check-circle"
+          :loading="processingCheckout"
+          :disabled="cart.length === 0"
+          class="checkout-btn"
+          size="large"
+          @click="handlePayment"
+        />
+      </div>
     </div>
 
     <!-- Receipt Dialog -->
@@ -786,6 +787,7 @@ onMounted(() => {
   gap: 1rem;
   height: calc(100vh - 60px - 3rem);
   min-width: 0;
+  min-height: 0;
 }
 
 /* ── Left Panel ── */
@@ -904,6 +906,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
+  min-height: 0;
 }
 
 .cart-header {
@@ -931,6 +935,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .empty-cart {
@@ -1095,15 +1101,25 @@ onMounted(() => {
 }
 
 /* ── Checkout ── */
-.checkout-btn {
-  margin: 0.75rem 1.25rem 1.25rem;
-  height: 48px;
-  font-size: 1rem;
-  font-weight: 700;
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1.25rem;
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .return-btn {
-  margin: 0 1.25rem 0.5rem;
+  flex: 1;
+  height: 48px;
+  white-space: nowrap;
+}
+
+.checkout-btn {
+  flex: 2;
+  height: 48px;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 /* ── Receipt ── */
