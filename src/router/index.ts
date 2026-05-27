@@ -60,6 +60,31 @@ const router = createRouter({
           name: 'customers',
           component: () => import('../views/customers/CustomersView.vue'),
         },
+        {
+          path: 'staff',
+          name: 'staff',
+          component: () => import('../views/staff/StaffView.vue'),
+        },
+        {
+          path: 'transactions',
+          name: 'transactions',
+          component: () => import('../views/transactions/TransactionsView.vue'),
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('../views/profile/ProfileView.vue'),
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('../views/settings/SettingsView.vue'),
+        },
+        {
+          path: 'reports',
+          name: 'reports',
+          component: () => import('../views/reports/ReportsView.vue'),
+        },
       ],
     },
 

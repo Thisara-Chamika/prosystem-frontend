@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import productService from '../../services/productService'
 import posService from '../../services/posService'
 import type { CartItem, CreateTransactionRequest } from '../../types'
@@ -8,6 +9,7 @@ import customerService from '../../services/customerService'
 import type { Customer, CreateCustomerRequest } from '../../types'
 import { useAuthStore } from '../../stores/authStore'
 import CashPaymentDialog from './CashPaymentDialog.vue'
+import ReturnLookupPanel from './ReturnLookupPanel.vue'
 
 // PrimeVue components
 import InputText from 'primevue/inputtext'
@@ -23,6 +25,7 @@ import InputIcon from 'primevue/inputicon'
 import AutoComplete from 'primevue/autocomplete'
 
 const toast = useToast()
+const route = useRoute()
 
 // ── Product Search State ───────────────────────────
 const searchQuery = ref('')
@@ -42,6 +45,8 @@ const processingCheckout = ref(false)
 const showReceipt = ref(false)
 // ── Cash Payment Dialog ────────────────────────────
 const showCashDialog = ref(false)
+// ── Return Lookup ──────────────────────────────────
+const showReturnLookup = ref(false)
 
 const lastTransaction = ref<any>(null)
 const authStore = useAuthStore()
@@ -383,6 +388,9 @@ function handlePayment() {
 
 onMounted(() => {
   loadAllProducts()
+  if (route.query.return === 'true') {
+    showReturnLookup.value = true
+  }
 })
 </script>
 
@@ -631,16 +639,26 @@ onMounted(() => {
         <InputText v-model="notes" placeholder="Add notes (optional)..." class="w-full" />
       </div>
 
-      <!-- Checkout Button -->
-      <Button
-        label="Process Payment"
-        icon="pi pi-check-circle"
-        :loading="processingCheckout"
-        :disabled="cart.length === 0"
-        class="checkout-btn w-full"
-        size="large"
-        @click="handlePayment"
-      />
+      <!-- Return Button -->
+      <div class="action-buttons">
+        <Button
+          label="Return"
+          icon="pi pi-replay"
+          severity="danger"
+          class="return-btn"
+          @click="showReturnLookup = true"
+        />
+        <!-- Checkout Button -->
+        <Button
+          label="Process Payment"
+          icon="pi pi-check-circle"
+          :loading="processingCheckout"
+          :disabled="cart.length === 0"
+          class="checkout-btn"
+          size="large"
+          @click="handlePayment"
+        />
+      </div>
     </div>
 
     <!-- Receipt Dialog -->
@@ -756,6 +774,9 @@ onMounted(() => {
       :totalAmount="totalAmount"
       @confirm="processCheckout"
     />
+
+    <!-- Return Lookup Panel -->
+    <ReturnLookupPanel v-if="showReturnLookup" @close="showReturnLookup = false" />
   </div>
 </template>
 
@@ -766,6 +787,7 @@ onMounted(() => {
   gap: 1rem;
   height: calc(100vh - 60px - 3rem);
   min-width: 0;
+  min-height: 0;
 }
 
 /* ── Left Panel ── */
@@ -884,6 +906,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
+  min-height: 0;
 }
 
 .cart-header {
@@ -911,6 +935,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .empty-cart {
@@ -1075,8 +1101,22 @@ onMounted(() => {
 }
 
 /* ── Checkout ── */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1.25rem;
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.return-btn {
+  flex: 1;
+  height: 48px;
+  white-space: nowrap;
+}
+
 .checkout-btn {
-  margin: 0.75rem 1.25rem 1.25rem;
+  flex: 2;
   height: 48px;
   font-size: 1rem;
   font-weight: 700;

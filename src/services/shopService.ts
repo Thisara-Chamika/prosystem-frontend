@@ -42,6 +42,25 @@ const shopService = {
     const response = await api.post('/api/shops/complete-onboarding', {})
     return response.data
   },
+  // GET /api/shops/settings
+  async getSettings(): Promise<any> {
+    const response = await api.get('/api/shops/settings')
+    return response.data
+  },
+
+  // PUT /api/shops/settings
+  async updateSettings(data: {
+    name?: string
+    currency?: string
+    timezone?: string
+    configuration?: {
+      primaryColor?: string
+      logoUrl?: string | null
+    }
+  }): Promise<any> {
+    const response = await api.put('/api/shops/settings', data)
+    return response.data
+  },
 }
 
 export default shopService

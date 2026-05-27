@@ -124,6 +124,8 @@ export interface TransactionItem {
   productName: string
   productSku: string
   quantity: number
+  returnedQuantity: number
+  availableToReturn: number
   unitPrice: string
   discount: string
   total: string
@@ -145,6 +147,7 @@ export interface Transaction {
   notes: string | null
   createdAt: string
   items?: TransactionItem[]
+  returns?: ReturnRecord[]
 }
 
 // What we send to create a transaction
@@ -218,4 +221,117 @@ export interface BusinessType {
   name: string
   icon: string
   description: string
+}
+
+// Staff member
+export interface Staff {
+  userId: string
+  shopId: string
+  firstName: string
+  lastName: string
+  email: string
+  role: 'shop_manager' | 'cashier'
+  phone: string | null
+  isActive: boolean
+  lastLogin: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// What we send to create a staff member
+export interface CreateStaffRequest {
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  role: 'shop_manager' | 'cashier'
+  phone?: string
+}
+
+// What we send to update a staff member
+export interface UpdateStaffRequest {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  password?: string
+  role?: 'shop_manager' | 'cashier'
+  isActive?: boolean
+}
+
+// Transaction status type
+export type TransactionStatus =
+  | 'completed'
+  | 'partial_refund'
+  | 'refunded'
+  | 'cancelled'
+  | 'pending'
+
+// Return item request
+export interface ReturnItemRequest {
+  productId: string
+  transactionItemId: string
+  quantity: number
+  reason?: string
+}
+
+// Return request
+export interface ProcessReturnRequest {
+  reason?: string
+  refundMethod: 'cash' | 'card' | 'store_credit'
+  approvedBy?: string | null
+  items: ReturnItemRequest[]
+}
+
+// Return response
+export interface ReturnResponse {
+  return: {
+    returnId: string
+    transactionId: string
+    returnedBy: string
+    reason: string | null
+    refundMethod: string
+    totalRefund: string
+    status: string
+    createdAt: string
+  }
+  items: {
+    returnItemId: string
+    productId: string
+    transactionItemId: string
+    quantity: number
+    unitPrice: string
+    total: string
+    reason: string | null
+  }[]
+  transactionStatus: string
+  totalRefund: string
+  refundMethod: string
+  approvedBy: string | null
+}
+
+// Manager for approval
+export interface Manager {
+  userId: string
+  firstName: string
+  lastName: string
+  role: 'shop_owner' | 'shop_manager'
+  hasPin: boolean
+}
+
+// return record in transaction detail
+export interface ReturnRecord {
+  returnId: string
+  reason: string | null
+  refundMethod: string
+  totalRefund: string
+  createdAt: string
+  returnedBy: string
+  approvedBy: string | null
+  items: {
+    productName: string
+    transactionItemId: string
+    quantity: number
+    total: string
+  }[]
 }

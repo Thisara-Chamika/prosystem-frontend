@@ -1,36 +1,33 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../../stores/authStore'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
-const menuItems = [
-  {
-    label: 'Dashboard',
-    icon: 'pi pi-home',
-    route: '/dashboard',
-  },
-  {
-    label: 'Customers',
-    icon: 'pi pi-users',
-    route: '/customers',
-  },
-  {
-    label: 'POS',
-    icon: 'pi pi-shopping-cart',
-    route: '/pos',
-  },
-  {
-    label: 'Products',
-    icon: 'pi pi-box',
-    route: '/products',
-  },
-  {
-    label: 'Inventory',
-    icon: 'pi pi-warehouse',
-    route: '/inventory',
-  },
-]
+const menuItems = computed(() => {
+  const items = [
+    { label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' },
+    { label: 'Customers', icon: 'pi pi-users', route: '/customers' },
+    { label: 'POS', icon: 'pi pi-shopping-cart', route: '/pos' },
+    { label: 'Products', icon: 'pi pi-box', route: '/products' },
+    { label: 'Inventory', icon: 'pi pi-warehouse', route: '/inventory' },
+  ]
+
+  if (authStore.userRole === 'shop_owner' || authStore.userRole === 'shop_manager') {
+    items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
+    items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })
+  }
+
+  if (authStore.userRole === 'shop_owner') {
+    items.push({ label: 'Staff', icon: 'pi pi-id-card', route: '/staff' })
+    items.push({ label: 'Settings', icon: 'pi pi-cog', route: '/settings' })
+  }
+
+  return items
+})
 
 function navigate(path: string) {
   router.push(path)
