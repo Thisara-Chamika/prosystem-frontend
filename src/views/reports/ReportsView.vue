@@ -8,23 +8,34 @@ import Button from 'primevue/button'
 import Select from 'primevue/select'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 
+import { Line, Doughnut } from 'vue-chartjs'
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
   Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
-} from 'recharts'
+  Filler,
+} from 'chart.js'
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+)
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -38,7 +49,6 @@ if (authStore.userRole === 'cashier') {
 // ── State ─────────────────────────────────────────
 const loading = ref(false)
 
-// Period selection
 const selectedPeriod = ref('today')
 const fromDate = ref('')
 const toDate = ref('')
@@ -50,7 +60,6 @@ const periodOptions = [
   { label: 'Custom', value: 'custom' },
 ]
 
-// Report data
 const summary = ref<any>(null)
 const dailySales = ref<any[]>([])
 const topProducts = ref<any[]>([])
@@ -59,6 +68,77 @@ const cashierSummary = ref<any[]>([])
 
 // ── Chart colors ──────────────────────────────────
 const PIE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6']
+
+// ── Chart data computed ───────────────────────────
+const lineChartData = computed(() => ({
+  labels: dailySales.value.map((d) => formatChartDate(d.date)),
+  datasets: [
+    {
+      label: 'Revenue',
+      data: dailySales.value.map((d) => d.revenue),
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      borderWidth: 2,
+      pointBackgroundColor: '#3b82f6',
+      pointRadius: 4,
+      fill: true,
+      tension: 0.4,
+    },
+  ],
+}))
+
+const lineChartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (context: any) => authStore.formatCurrency(context.raw),
+      },
+    },
+  },
+  scales: {
+    x: {
+      grid: { color: '#334155' },
+      ticks: { color: '#94a3b8' },
+    },
+    y: {
+      grid: { color: '#334155' },
+      ticks: {
+        color: '#94a3b8',
+        callback: (value: any) => authStore.formatCurrency(value),
+      },
+    },
+  },
+}))
+
+const doughnutChartData = computed(() => ({
+  labels: paymentMethods.value.map((p) => p.method.toUpperCase()),
+  datasets: [
+    {
+      data: paymentMethods.value.map((p) => p.total),
+      backgroundColor: PIE_COLORS,
+      borderWidth: 0,
+    },
+  ],
+}))
+
+const doughnutChartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom' as const,
+      labels: { color: '#94a3b8', padding: 16 },
+    },
+    tooltip: {
+      callbacks: {
+        label: (context: any) => `${context.label}: ${authStore.formatCurrency(context.raw)}`,
+      },
+    },
+  },
+}))
 
 // ── Date helpers ──────────────────────────────────
 function getDateRange(): { fromDate: string; toDate: string } {
@@ -83,9 +163,8 @@ function getDateRange(): { fromDate: string; toDate: string } {
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
       return { fromDate: formatDate(firstDay), toDate: formatDate(today) }
     }
-    case 'custom': {
+    case 'custom':
       return { fromDate: fromDate.value, toDate: toDate.value }
-    }
     default:
       return { fromDate: formatDate(today), toDate: formatDate(today) }
   }
@@ -99,7 +178,7 @@ function formatChartDate(dateStr: string): string {
   }).format(new Date(dateStr))
 }
 
-// ── Load all reports in parallel ──────────────────
+// ── Load reports ──────────────────────────────────
 async function loadReports() {
   if (selectedPeriod.value === 'custom' && (!fromDate.value || !toDate.value)) {
     toast.add({
@@ -163,10 +242,8 @@ function exportCSV() {
     toast.add({ severity: 'warn', summary: 'No Data', detail: 'No data to export', life: 3000 })
     return
   }
-
   const headers = ['Date', 'Revenue', 'Transactions']
   const rows = dailySales.value.map((d) => [d.date, d.revenue, d.transactions])
-
   const csvContent = [headers, ...rows].map((r) => r.join(',')).join('\n')
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
@@ -224,14 +301,12 @@ onMounted(() => {
         class="period-select"
         @change="onPeriodChange"
       />
-
       <template v-if="selectedPeriod === 'custom'">
         <input type="date" v-model="fromDate" class="date-input" />
         <span class="date-sep">to</span>
         <input type="date" v-model="toDate" class="date-input" />
         <Button label="Apply" icon="pi pi-check" size="small" @click="loadReports" />
       </template>
-
       <Button
         icon="pi pi-refresh"
         severity="secondary"
@@ -252,9 +327,9 @@ onMounted(() => {
         <div class="summary-card blue">
           <div class="summary-icon"><i class="pi pi-dollar" /></div>
           <div class="summary-info">
-            <span class="summary-value">
-              {{ authStore.formatCurrency(summary?.todayRevenue ?? 0) }}
-            </span>
+            <span class="summary-value">{{
+              authStore.formatCurrency(summary?.todayRevenue ?? 0)
+            }}</span>
             <span class="summary-label">Total Revenue</span>
             <div class="summary-change" :class="getChangeClass(summary?.revenueChange ?? 0)">
               <i :class="getChangeIcon(summary?.revenueChange ?? 0)" />
@@ -278,9 +353,9 @@ onMounted(() => {
         <div class="summary-card teal">
           <div class="summary-icon"><i class="pi pi-chart-bar" /></div>
           <div class="summary-info">
-            <span class="summary-value">
-              {{ authStore.formatCurrency(summary?.averageTicket ?? 0) }}
-            </span>
+            <span class="summary-value">{{
+              authStore.formatCurrency(summary?.averageTicket ?? 0)
+            }}</span>
             <span class="summary-label">Avg Ticket</span>
           </div>
         </div>
@@ -288,9 +363,9 @@ onMounted(() => {
         <div class="summary-card green">
           <div class="summary-icon"><i class="pi pi-percentage" /></div>
           <div class="summary-info">
-            <span class="summary-value">
-              {{ authStore.formatCurrency(summary?.totalTax ?? 0) }}
-            </span>
+            <span class="summary-value">{{
+              authStore.formatCurrency(summary?.totalTax ?? 0)
+            }}</span>
             <span class="summary-label">Total Tax</span>
           </div>
         </div>
@@ -298,9 +373,9 @@ onMounted(() => {
         <div class="summary-card orange">
           <div class="summary-icon"><i class="pi pi-tag" /></div>
           <div class="summary-info">
-            <span class="summary-value">
-              {{ authStore.formatCurrency(summary?.totalDiscount ?? 0) }}
-            </span>
+            <span class="summary-value">{{
+              authStore.formatCurrency(summary?.totalDiscount ?? 0)
+            }}</span>
             <span class="summary-label">Total Discount</span>
           </div>
         </div>
@@ -309,30 +384,12 @@ onMounted(() => {
       <!-- ── Section 2: Revenue Chart ── -->
       <div class="chart-card">
         <h3 class="card-title">Revenue Over Time</h3>
-
         <div class="empty-chart" v-if="dailySales.length === 0">
           <i class="pi pi-chart-line" />
           <p>No sales data for this period</p>
         </div>
-
-        <div class="chart-wrapper" v-else>
-          <ResponsiveContainer width="100%" :height="250" :key="'line-' + dailySales.length">
-            <LineChart :data="dailySales.map((d) => ({ ...d, date: formatChartDate(d.date) }))">
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" stroke="#64748b" tick="{{ fill: '#94a3b8', fontSize: 12 }}" />
-              <YAxis stroke="#64748b" tick="{{ fill: '#94a3b8', fontSize: 12 }}" />
-              <Tooltip
-                contentStyle="{{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}"
-              />
-              <Line
-                type="monotone"
-                dataKey="revenue"
-                stroke="#3b82f6"
-                strokeWidth="{2}"
-                dot="{{ fill: '#3b82f6', r: 4 }}"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        <div class="chart-wrapper" v-else style="height: 250px">
+          <Line :data="lineChartData" :options="lineChartOptions" />
         </div>
       </div>
 
@@ -341,20 +398,16 @@ onMounted(() => {
         <!-- Top Products -->
         <div class="chart-card">
           <h3 class="card-title">Top Products</h3>
-
           <div class="empty-chart" v-if="topProducts.length === 0">
             <i class="pi pi-box" />
             <p>No products sold in this period</p>
           </div>
-
           <DataTable v-else :value="topProducts" stripedRows tableStyle="min-width: 100%">
             <Column field="productName" header="Product" />
             <Column field="quantitySold" header="Sold" style="width: 15%" />
             <Column header="Revenue" style="width: 30%">
               <template #body="{ data }">
-                <span class="revenue-cell">
-                  {{ authStore.formatCurrency(data.revenue) }}
-                </span>
+                <span class="revenue-cell">{{ authStore.formatCurrency(data.revenue) }}</span>
               </template>
             </Column>
           </DataTable>
@@ -363,36 +416,14 @@ onMounted(() => {
         <!-- Payment Methods -->
         <div class="chart-card">
           <h3 class="card-title">Payment Methods</h3>
-
           <div class="empty-chart" v-if="paymentMethods.length === 0">
             <i class="pi pi-credit-card" />
             <p>No payment data for this period</p>
           </div>
-
           <template v-else>
-            <div class="chart-wrapper">
-              <ResponsiveContainer width="100%" :height="200" :key="'pie-' + paymentMethods.length">
-                <PieChart>
-                  <Pie
-                    :data="paymentMethods.map((p) => ({ name: p.method, value: p.total }))"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="{50}"
-                    outerRadius="{80}"
-                    dataKey="value"
-                  >
-                    <Cell
-                      v-for="(entry, index) in paymentMethods"
-                      :key="entry.method"
-                      :fill="PIE_COLORS[index % PIE_COLORS.length]"
-                    />
-                  </Pie>
-                  <Legend />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+            <div class="chart-wrapper" style="height: 200px">
+              <Doughnut :data="doughnutChartData" :options="doughnutChartOptions" />
             </div>
-
             <div class="payment-list">
               <div v-for="(item, index) in paymentMethods" :key="item.method" class="payment-row">
                 <div
@@ -411,12 +442,10 @@ onMounted(() => {
       <!-- ── Section 4: Cashier Performance ── -->
       <div class="chart-card">
         <h3 class="card-title">Cashier Performance</h3>
-
         <div class="empty-chart" v-if="cashierSummary.length === 0">
           <i class="pi pi-users" />
           <p>No cashier data for this period</p>
         </div>
-
         <DataTable v-else :value="cashierSummary" stripedRows tableStyle="min-width: 100%">
           <Column field="cashierName" header="Cashier" />
           <Column field="totalTransactions" header="Transactions" style="width: 15%" />
@@ -428,9 +457,7 @@ onMounted(() => {
           <Column field="totalReturns" header="Returns" style="width: 12%" />
           <Column header="Revenue" style="width: 22%">
             <template #body="{ data }">
-              <span class="revenue-cell">
-                {{ authStore.formatCurrency(data.totalRevenue) }}
-              </span>
+              <span class="revenue-cell">{{ authStore.formatCurrency(data.totalRevenue) }}</span>
             </template>
           </Column>
         </DataTable>
@@ -470,7 +497,6 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
-/* ── Period Selector ── */
 .period-selector {
   display: flex;
   align-items: center;
@@ -501,7 +527,6 @@ onMounted(() => {
   font-size: 0.875rem;
 }
 
-/* ── Skeleton ── */
 .skeleton-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -525,7 +550,6 @@ onMounted(() => {
   }
 }
 
-/* ── Summary Cards ── */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -634,7 +658,6 @@ onMounted(() => {
   color: #64748b;
 }
 
-/* ── Chart Cards ── */
 .chart-card {
   background: #1e293b;
   border: 1px solid #334155;
@@ -656,6 +679,7 @@ onMounted(() => {
 
 .chart-wrapper {
   width: 100%;
+  position: relative;
 }
 
 .empty-chart {
@@ -671,20 +695,17 @@ onMounted(() => {
 .empty-chart i {
   font-size: 2rem;
 }
-
 .empty-chart p {
   font-size: 0.875rem;
   margin: 0;
 }
 
-/* ── Two Column Layout ── */
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
 }
 
-/* ── Payment List ── */
 .payment-list {
   display: flex;
   flex-direction: column;
@@ -724,7 +745,6 @@ onMounted(() => {
   color: #22c55e;
 }
 
-/* ── Revenue cell ── */
 .revenue-cell {
   font-weight: 600;
   color: #22c55e;
