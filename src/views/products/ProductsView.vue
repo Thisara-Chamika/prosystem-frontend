@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue'
 import productService from '../../services/productService'
 import type { Product, CreateProductRequest, UpdateProductRequest } from '../../types'
 import { useAuthStore } from '../../stores/authStore'
+import categoryService from '../../services/categoryService'
+import type { Category } from '../../types'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -49,29 +51,28 @@ const form = ref<CreateProductRequest>({
   initialStock: 0,
 })
 
-const categories = ref([
-  { label: 'Electronics', value: 'Electronics' },
-  { label: 'Clothing', value: 'Clothing' },
-  { label: 'Food & Beverage', value: 'Food & Beverage' },
-  { label: 'Home & Garden', value: 'Home & Garden' },
-  { label: 'Sports', value: 'Sports' },
-  { label: 'Other', value: 'Other' },
-])
+const categories = ref<Category[]>([])
+
+async function loadCategories() {
+  try {
+    const response = await categoryService.getCategories()
+    if (response.success) {
+      categories.value = response.data
+    }
+  } catch {
+    categories.value = []
+  }
+}
 
 // ── Methods ───────────────────────────────────────
 async function loadProducts() {
   loading.value = true
   try {
     const response = await productService.getProducts(currentPage.value, pageSize.value)
-    console.log('Full response:', response)
-    console.log('Response type:', typeof response)
-    console.log('Response keys:', Object.keys(response))
 
     // Handle the response
     if (response && response.success) {
       const productData = response.data
-      console.log('Product data:', productData)
-      console.log('Is array?', Array.isArray(productData))
 
       if (Array.isArray(productData)) {
         products.value = productData
@@ -82,8 +83,6 @@ async function loadProducts() {
       }
     }
   } catch (error: any) {
-    console.error('Load products error:', error)
-    console.error('Error details:', error.message)
     toast.add({
       severity: 'error',
       summary: 'Error',
@@ -217,6 +216,7 @@ function onPageChange(event: any) {
 // Load products when page opens
 onMounted(() => {
   loadProducts()
+  loadCategories()
 })
 </script>
 
@@ -339,11 +339,17 @@ onMounted(() => {
           <Select
             v-model="form.category"
             :options="categories"
-            optionLabel="label"
-            optionValue="value"
+            optionLabel="name"
+            optionValue="name"
             placeholder="Select category"
             class="w-full"
-          />
+          >
+            <template #empty>
+              <div class="category-empty">
+                No categories yet. Add them in Settings → Categories.
+              </div>
+            </template>
+          </Select>
         </div>
 
         <!-- Row 4: Price + Cost -->
@@ -478,5 +484,12 @@ onMounted(() => {
 
 .w-full {
   width: 100% !important;
+}
+
+.category-empty {
+  padding: 0.75rem;
+  color: #64748b;
+  font-size: 0.875rem;
+  text-align: center;
 }
 </style>

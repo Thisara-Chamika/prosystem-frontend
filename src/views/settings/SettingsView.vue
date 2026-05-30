@@ -3,6 +3,8 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import shopService from '../../services/shopService'
 import { useAuthStore } from '../../stores/authStore'
+import categoryService from '../../services/categoryService'
+import type { Category } from '../../types'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -15,10 +17,13 @@ import TabPanel from 'primevue/tabpanel'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
+import { useConfirm } from 'primevue/useconfirm'
+import ConfirmDialog from 'primevue/confirmdialog'
 
 const toast = useToast()
 const authStore = useAuthStore()
 const router = useRouter()
+const confirm = useConfirm()
 
 // ── Role Guard ────────────────────────────────────
 if (authStore.userRole !== 'shop_owner') {
@@ -43,6 +48,18 @@ const primaryColor = ref('#3b82f6')
 const originalColor = ref('#3b82f6')
 const logoUrl = ref('')
 const savingBranding = ref(false)
+
+// Categories tab
+const categories = ref<Category[]>([])
+const loadingCategories = ref(false)
+const showAddCategoryDialog = ref(false)
+const showEditCategoryDialog = ref(false)
+const savingCategory = ref(false)
+const editingCategory = ref<Category | null>(null)
+const newCategoryName = ref('')
+const editCategoryName = ref('')
+const showCategoryErrorDialog = ref(false)
+const categoryErrorMessage = ref('')
 
 // ── Options ───────────────────────────────────────
 const currencyOptions = [
@@ -186,18 +203,161 @@ async function saveBranding() {
   }
 }
 
+async function loadCategories() {
+  loadingCategories.value = true
+  try {
+    const response = await categoryService.getCategories()
+    if (response.success) categories.value = response.data
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load categories',
+      life: 3000,
+    })
+  } finally {
+    loadingCategories.value = false
+  }
+}
+
+async function addCategory() {
+  if (!newCategoryName.value.trim()) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Required',
+      detail: 'Category name is required',
+      life: 3000,
+    })
+    return
+  }
+  savingCategory.value = true
+  try {
+    const response = await categoryService.createCategory({
+      name: newCategoryName.value.trim(),
+      sortOrder: categories.value.length + 1,
+    })
+    if (response.success) {
+      categories.value.push(response.data)
+      newCategoryName.value = ''
+      showAddCategoryDialog.value = false
+      toast.add({
+        severity: 'success',
+        summary: 'Added',
+        detail: 'Category added successfully',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to add category',
+      life: 3000,
+    })
+  } finally {
+    savingCategory.value = false
+  }
+}
+
+function openEditCategory(category: Category) {
+  editingCategory.value = category
+  editCategoryName.value = category.name
+  showEditCategoryDialog.value = true
+}
+
+async function saveEditCategory() {
+  if (!editingCategory.value) return
+  savingCategory.value = true
+  try {
+    const response = await categoryService.updateCategory(editingCategory.value.categoryId, {
+      name: editCategoryName.value.trim(),
+    })
+    if (response.success) {
+      const index = categories.value.findIndex(
+        (c) => c.categoryId === editingCategory.value!.categoryId,
+      )
+      if (index !== -1) categories.value[index] = response.data
+      showEditCategoryDialog.value = false
+      toast.add({
+        severity: 'success',
+        summary: 'Updated',
+        detail: 'Category updated successfully',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to update category',
+      life: 3000,
+    })
+  } finally {
+    savingCategory.value = false
+  }
+}
+
+function confirmDeleteCategory(category: Category) {
+  confirm.require({
+    message: `Are you sure you want to delete "${category.name}"?`,
+    header: 'Confirm Delete',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'Cancel', severity: 'secondary' },
+    acceptProps: { label: 'Delete', severity: 'danger' },
+    accept: async () => {
+      try {
+        await categoryService.deleteCategory(category.categoryId)
+        categories.value = categories.value.filter((c) => c.categoryId !== category.categoryId)
+        toast.add({
+          severity: 'success',
+          summary: 'Deleted',
+          detail: 'Category deleted',
+          life: 3000,
+        })
+      } catch (error: any) {
+        const message = error.response?.data?.message || ''
+        if (message.includes('Cannot delete')) {
+          categoryErrorMessage.value = message
+          showCategoryErrorDialog.value = true
+        } else {
+          toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: message || 'Failed to delete category',
+            life: 3000,
+          })
+        }
+      }
+    },
+  })
+}
+
+async function onDragEnd(event: any) {
+  const reordered = categories.value.map((cat, index) => ({
+    categoryId: cat.categoryId,
+    sortOrder: index + 1,
+  }))
+  try {
+    await categoryService.reorderCategories(reordered)
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save order', life: 3000 })
+  }
+}
+
 onBeforeUnmount(() => {
   document.documentElement.style.setProperty('--ps-primary', originalColor.value)
 })
 
 onMounted(() => {
   loadSettings()
+  loadCategories()
 })
 </script>
 
 <template>
   <div class="settings-page">
     <Toast />
+    <ConfirmDialog />
 
     <!-- Page Header -->
     <div class="page-header">
@@ -218,7 +378,8 @@ onMounted(() => {
         <TabList>
           <Tab value="0">General</Tab>
           <Tab value="1">Branding</Tab>
-          <Tab value="2">Audit Log</Tab>
+          <Tab value="2">Categories</Tab>
+          <Tab value="3">Audit Log</Tab>
         </TabList>
 
         <TabPanels>
@@ -388,8 +549,64 @@ onMounted(() => {
             </div>
           </TabPanel>
 
-          <!-- ── Tab 3: Audit Log ── -->
+          <!-- ── Tab 3: Categories ── -->
           <TabPanel value="2">
+            <div class="tab-content">
+              <div class="settings-card">
+                <div class="categories-header">
+                  <div>
+                    <h3 class="card-title" style="border: none; padding: 0">Product Categories</h3>
+                    <p class="card-desc">Manage your product categories</p>
+                  </div>
+                  <Button
+                    label="Add Category"
+                    icon="pi pi-plus"
+                    size="small"
+                    @click="showAddCategoryDialog = true"
+                  />
+                </div>
+
+                <div class="loading-state" v-if="loadingCategories">
+                  <i class="pi pi-spin pi-spinner" />
+                </div>
+
+                <div class="empty-categories" v-else-if="categories.length === 0">
+                  <i class="pi pi-tag" />
+                  <p>No categories yet. Add your first category.</p>
+                </div>
+
+                <div class="categories-list" v-else>
+                  <div
+                    v-for="category in categories"
+                    :key="category.categoryId"
+                    class="category-item"
+                  >
+                    <i class="pi pi-bars drag-handle" />
+                    <span class="category-name">{{ category.name }}</span>
+                    <div class="category-actions">
+                      <Button
+                        icon="pi pi-pencil"
+                        size="small"
+                        severity="secondary"
+                        text
+                        @click="openEditCategory(category)"
+                      />
+                      <Button
+                        icon="pi pi-trash"
+                        size="small"
+                        severity="danger"
+                        text
+                        @click="confirmDeleteCategory(category)"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+
+          <!-- ── Tab 4: Audit Log ── -->
+          <TabPanel value="3">
             <div class="tab-content">
               <div class="coming-soon">
                 <i class="pi pi-shield coming-soon-icon" />
@@ -424,6 +641,71 @@ onMounted(() => {
       <template #footer>
         <Button label="Cancel" severity="secondary" @click="showCurrencyWarning = false" />
         <Button label="Yes, Change Currency" severity="warning" @click="saveGeneral" />
+      </template>
+    </Dialog>
+
+    <!-- Add Category Dialog -->
+    <Dialog
+      v-model:visible="showAddCategoryDialog"
+      header="Add Category"
+      :style="{ width: '380px' }"
+      modal
+    >
+      <div class="dialog-form">
+        <div class="field">
+          <label>Category Name *</label>
+          <InputText
+            v-model="newCategoryName"
+            placeholder="e.g. Electronics"
+            class="w-full"
+            autofocus
+          />
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showAddCategoryDialog = false" />
+        <Button label="Add" icon="pi pi-check" :loading="savingCategory" @click="addCategory" />
+      </template>
+    </Dialog>
+
+    <!-- Edit Category Dialog -->
+    <Dialog
+      v-model:visible="showEditCategoryDialog"
+      header="Edit Category"
+      :style="{ width: '380px' }"
+      modal
+    >
+      <div class="dialog-form">
+        <div class="field">
+          <label>Category Name *</label>
+          <InputText v-model="editCategoryName" placeholder="Category name" class="w-full" />
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showEditCategoryDialog = false" />
+        <Button
+          label="Save"
+          icon="pi pi-check"
+          :loading="savingCategory"
+          @click="saveEditCategory"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Category Error Dialog -->
+    <Dialog
+      v-model:visible="showCategoryErrorDialog"
+      header="Cannot Delete"
+      :style="{ width: '380px' }"
+      modal
+    >
+      <div class="warning-dialog">
+        <i class="pi pi-exclamation-triangle warning-icon" />
+        <p>{{ categoryErrorMessage }}</p>
+        <p class="warning-note">Reassign those products first.</p>
+      </div>
+      <template #footer>
+        <Button label="OK" @click="showCategoryErrorDialog = false" />
       </template>
     </Dialog>
   </div>
@@ -753,5 +1035,85 @@ onMounted(() => {
 
 .w-full {
   width: 100% !important;
+}
+
+.categories-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #334155;
+}
+
+.empty-categories {
+  text-align: center;
+  padding: 2rem;
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.empty-categories i {
+  font-size: 2rem;
+}
+
+.empty-categories p {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.drag-handle {
+  color: #475569;
+  cursor: grab;
+  font-size: 0.875rem;
+}
+
+.category-name {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #f1f5f9;
+}
+
+.category-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #cbd5e1;
 }
 </style>
