@@ -81,7 +81,7 @@ async function loadTransactions() {
       }
 
       transactions.value = data
-      totalRecords.value = data.length
+      totalRecords.value = response.pagination?.total ?? data.length
       await loadCustomerNames(data)
     }
   } catch {

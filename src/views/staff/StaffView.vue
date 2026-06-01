@@ -91,7 +91,7 @@ async function loadStaff() {
     const response = await staffService.getStaff(params)
     if (response.success) {
       staff.value = response.data
-      totalRecords.value = response.data.length
+      totalRecords.value = response.pagination?.total ?? response.data.length
     }
   } catch {
     toast.add({

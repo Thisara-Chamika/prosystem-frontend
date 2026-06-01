@@ -67,7 +67,7 @@ async function loadCustomers() {
     )
     if (response.success) {
       customers.value = response.data
-      totalRecords.value = response.data.length
+      totalRecords.value = response.pagination?.total ?? response.data.length
     }
   } catch {
     toast.add({
