@@ -76,7 +76,7 @@ async function loadProducts() {
 
       if (Array.isArray(productData)) {
         products.value = productData
-        totalRecords.value = productData.length
+        totalRecords.value = response.pagination?.total ?? productData.length
       } else {
         products.value = []
         totalRecords.value = 0
@@ -244,6 +244,7 @@ onMounted(() => {
         :rows="pageSize"
         :totalRecords="totalRecords"
         :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
         @page="onPageChange"
         stripedRows
         tableStyle="min-width: 50rem"
