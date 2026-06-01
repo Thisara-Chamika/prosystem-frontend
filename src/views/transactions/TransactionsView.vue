@@ -249,6 +249,7 @@ onMounted(() => {
         :rows="pageSize"
         :totalRecords="totalRecords"
         :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
         @page="onPageChange"
         stripedRows
         tableStyle="min-width: 50rem"
