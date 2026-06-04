@@ -56,8 +56,10 @@ async function loadInventory() {
 
     const productList = response.data
 
-    // Filter only active products
-    const activeProducts = productList.filter((p: any) => p.isActive === true)
+    // Filter only active PHYSICAL products
+    const activeProducts = productList.filter(
+      (p: any) => p.isActive === true && p.productType !== 'service',
+    )
 
     const withInventory = await Promise.all(
       activeProducts.map(async (product: any) => {
@@ -152,6 +154,13 @@ onMounted(() => {
         <span class="summary-label">Out of Stock</span>
         <span class="summary-value">{{ outOfStockCount }}</span>
       </div>
+    </div>
+
+    <div class="inventory-note">
+      <i class="pi pi-info-circle" />
+      <span
+        >Only physical products appear here. Service items do not require inventory tracking.</span
+      >
     </div>
 
     <!-- Inventory Table -->
@@ -376,5 +385,22 @@ onMounted(() => {
 
 .w-full {
   width: 100% !important;
+}
+
+.inventory-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.inventory-note .pi {
+  color: #3b82f6;
+  flex-shrink: 0;
 }
 </style>
