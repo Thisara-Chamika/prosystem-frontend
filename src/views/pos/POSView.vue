@@ -129,8 +129,10 @@ async function searchProducts() {
         }),
       )
 
-      // Only show in-stock products
-      products.value = withInventory.filter((p: any) => (p.inventory?.quantity ?? 0) > 0)
+      // Show in-stock physical products AND all services
+      products.value = withInventory.filter(
+        (p: any) => p.productType === 'service' || (p.inventory?.quantity ?? 0) > 0,
+      )
     }
   } catch {
     toast.add({
@@ -163,8 +165,10 @@ async function loadAllProducts() {
         }),
       )
 
-      // Only show products with stock > 0
-      products.value = withInventory.filter((p: any) => (p.inventory?.quantity ?? 0) > 0)
+      // Show in-stock physical products AND all services
+      products.value = withInventory.filter(
+        (p: any) => p.productType === 'service' || (p.inventory?.quantity ?? 0) > 0,
+      )
     }
   } catch {
     toast.add({
@@ -179,12 +183,13 @@ async function loadAllProducts() {
 }
 
 function addToCart(product: any) {
+  const isService = product.productType === 'service'
   const availableStock = product.inventory?.quantity ?? 0
   const existing = cart.value.find((item) => item.productId === product.productId)
   const currentQty = existing?.quantity ?? 0
 
-  // Check if adding one more would exceed stock
-  if (currentQty >= availableStock) {
+  // Only check stock for physical products
+  if (!isService && currentQty >= availableStock) {
     toast.add({
       severity: 'warn',
       summary: 'Stock Limit Reached',
@@ -231,7 +236,9 @@ function updateQuantity(productId: string, quantity: number) {
   const product = products.value.find((p: any) => p.productId === productId)
   const availableStock = product?.inventory?.quantity ?? 0
 
-  if (quantity > availableStock) {
+  const isService =
+    products.value.find((p: any) => p.productId === productId)?.productType === 'service'
+  if (!isService && quantity > availableStock) {
     toast.add({
       severity: 'warn',
       summary: 'Stock Limit',
@@ -424,7 +431,11 @@ onMounted(() => {
             <div class="product-card-icon">
               <i class="pi pi-box" />
             </div>
+            <span v-if="product.productType === 'service'" class="stock-badge stock-service">
+              ⚡ Service
+            </span>
             <span
+              v-else
               class="stock-badge"
               :class="{
                 'stock-low': (product.inventory?.quantity ?? 0) <= 10,
@@ -1316,5 +1327,10 @@ onMounted(() => {
   font-size: 0.875rem;
   font-weight: 500;
   color: #cbd5e1;
+}
+
+.stock-service {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
 }
 </style>

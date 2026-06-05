@@ -11,9 +11,10 @@ export interface ProductsApiResponse {
 
 const productService = {
   // GET /api/products
-  async getProducts(page = 1, limit = 10): Promise<any> {
+  async getProducts(page = 1, limit = 10, productType?: string): Promise<any> {
+    const typeParam = productType ? `&productType=${productType}` : ''
     const response = await api.get(
-      `/api/products?page=${page}&limit=${limit}&sort=createdAt&order=desc`,
+      `/api/products?page=${page}&limit=${limit}&sort=createdAt&order=desc${typeParam}`,
     )
     return response.data
   },

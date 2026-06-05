@@ -53,6 +53,9 @@ const form = ref<CreateProductRequest>({
 
 const categories = ref<Category[]>([])
 
+const productTypeFilter = ref<'all' | 'product' | 'service'>('all')
+const formProductType = ref<'product' | 'service'>('product')
+
 async function loadCategories() {
   try {
     const response = await categoryService.getCategories()
@@ -68,7 +71,8 @@ async function loadCategories() {
 async function loadProducts() {
   loading.value = true
   try {
-    const response = await productService.getProducts(currentPage.value, pageSize.value)
+    const typeParam = productTypeFilter.value === 'all' ? undefined : productTypeFilter.value
+    const response = await productService.getProducts(currentPage.value, pageSize.value, typeParam)
 
     // Handle the response
     if (response && response.success) {
@@ -109,6 +113,7 @@ function openCreateDialog() {
     trackInventory: true,
     initialStock: 0,
   }
+  formProductType.value = 'product'
   showDialog.value = true
 }
 
@@ -126,6 +131,7 @@ function openEditDialog(product: Product) {
     taxRate: product.taxRate,
     trackInventory: product.trackInventory,
   }
+  formProductType.value = (product as any).productType || 'product'
   showDialog.value = true
 }
 
@@ -133,7 +139,12 @@ async function saveProduct() {
   saving.value = true
   try {
     if (dialogMode.value === 'create') {
-      const response = await productService.createProduct(form.value)
+      const payload = {
+        ...form.value,
+        productType: formProductType.value,
+        ...(formProductType.value === 'service' ? { initialStock: 0 } : {}),
+      }
+      const response = await productService.createProduct(payload)
       if (response.success) {
         toast.add({
           severity: 'success',
@@ -145,10 +156,11 @@ async function saveProduct() {
         loadProducts()
       }
     } else {
-      const response = await productService.updateProduct(
-        selectedProduct.value!.productId,
-        form.value as UpdateProductRequest,
-      )
+      const payload = {
+        ...(form.value as UpdateProductRequest),
+        productType: formProductType.value,
+      }
+      const response = await productService.updateProduct(selectedProduct.value!.productId, payload)
       if (response.success) {
         toast.add({
           severity: 'success',
@@ -213,6 +225,12 @@ function onPageChange(event: any) {
   loadProducts()
 }
 
+function onFilterChange(type: 'all' | 'product' | 'service') {
+  productTypeFilter.value = type
+  currentPage.value = 1
+  loadProducts()
+}
+
 // Load products when page opens
 onMounted(() => {
   loadProducts()
@@ -232,6 +250,30 @@ onMounted(() => {
         <p class="page-subtitle">Manage your product catalog</p>
       </div>
       <Button label="Add Product" icon="pi pi-plus" @click="openCreateDialog" />
+    </div>
+
+    <div class="filter-tabs">
+      <button
+        class="filter-tab"
+        :class="{ active: productTypeFilter === 'all' }"
+        @click="onFilterChange('all')"
+      >
+        All
+      </button>
+      <button
+        class="filter-tab"
+        :class="{ active: productTypeFilter === 'product' }"
+        @click="onFilterChange('product')"
+      >
+        Products
+      </button>
+      <button
+        class="filter-tab"
+        :class="{ active: productTypeFilter === 'service' }"
+        @click="onFilterChange('service')"
+      >
+        Services
+      </button>
     </div>
 
     <!-- Products Table -->
@@ -262,6 +304,16 @@ onMounted(() => {
         <Column field="category" header="Category" style="width: 15%">
           <template #body="{ data }">
             <span>{{ data.category || '—' }}</span>
+          </template>
+        </Column>
+        <Column header="Type" style="width: 10%">
+          <template #body="{ data }">
+            <span
+              class="type-badge"
+              :class="data.productType === 'service' ? 'type-service' : 'type-product'"
+            >
+              {{ data.productType === 'service' ? '⚡ Service' : '📦 Product' }}
+            </span>
           </template>
         </Column>
         <Column field="price" header="Price" style="width: 10%">
@@ -310,6 +362,33 @@ onMounted(() => {
       :style="{ width: '550px' }"
       modal
     >
+      <div class="type-selector">
+        <label>Product Type</label>
+        <div class="type-options">
+          <div
+            class="type-option"
+            :class="{ selected: formProductType === 'product' }"
+            @click="formProductType = 'product'"
+          >
+            <span class="type-option-icon">📦</span>
+            <div>
+              <span class="type-option-name">Product</span>
+              <span class="type-option-desc">Physical item · Track inventory</span>
+            </div>
+          </div>
+          <div
+            class="type-option"
+            :class="{ selected: formProductType === 'service' }"
+            @click="formProductType = 'service'"
+          >
+            <span class="type-option-icon">⚡</span>
+            <div>
+              <span class="type-option-name">Service</span>
+              <span class="type-option-desc">No stock needed · Made on demand</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="dialog-form">
         <!-- Row 1: SKU + Barcode -->
         <div class="form-row">
@@ -364,7 +443,7 @@ onMounted(() => {
               class="w-full"
             />
           </div>
-          <div class="field">
+          <div class="field" v-if="formProductType === 'product'">
             <label>Cost</label>
             <InputNumber
               v-model="form.cost"
@@ -382,9 +461,24 @@ onMounted(() => {
         </div>
 
         <!-- Row: Initial Stock (only show when creating) -->
-        <div class="field" v-if="dialogMode === 'create'">
+        <div class="field" v-if="dialogMode === 'create' && formProductType === 'product'">
           <label>Initial Stock</label>
           <InputNumber v-model="form.initialStock" :min="0" showButtons class="w-full" />
+        </div>
+        <div class="service-note" v-if="formProductType === 'service'">
+          <i class="pi pi-info-circle" />
+          <span>Services are not tracked in inventory</span>
+        </div>
+        <div
+          class="service-note warning"
+          v-if="
+            dialogMode === 'edit' &&
+            formProductType === 'product' &&
+            (selectedProduct as any)?.productType === 'service'
+          "
+        >
+          <i class="pi pi-exclamation-triangle" />
+          <span>Stock is currently 0. Update inventory after saving.</span>
         </div>
 
         <!-- Row 6: Description -->
@@ -492,5 +586,133 @@ onMounted(() => {
   color: #64748b;
   font-size: 0.875rem;
   text-align: center;
+}
+
+/* Filter tabs */
+.filter-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-tab {
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.filter-tab:hover {
+  border-color: #3b82f6;
+  color: #f1f5f9;
+}
+
+.filter-tab.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+  font-weight: 600;
+}
+
+/* Type badge */
+.type-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.type-product {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+}
+
+.type-service {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+}
+
+/* Type selector in form */
+.type-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.type-selector label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.type-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.type-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #0f172a;
+  border: 2px solid #334155;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.type-option:hover {
+  border-color: #3b82f6;
+}
+
+.type-option.selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.type-option-icon {
+  font-size: 1.5rem;
+}
+
+.type-option-name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.type-option-desc {
+  display: block;
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+/* Service note */
+.service-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #8b5cf6;
+}
+
+.service-note.warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.service-note .pi {
+  flex-shrink: 0;
 }
 </style>
