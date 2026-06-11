@@ -188,6 +188,17 @@ function addToCart(product: any) {
   const existing = cart.value.find((item) => item.productId === product.productId)
   const currentQty = existing?.quantity ?? 0
 
+  // Out of stock check
+  if (!isService && availableStock === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Out of Stock',
+      detail: `${product.name} is out of stock`,
+      life: 3000,
+    })
+    return
+  }
+
   // Only check stock for physical products
   if (!isService && currentQty >= availableStock) {
     toast.add({
@@ -421,10 +432,15 @@ onMounted(() => {
 
       <!-- Product Grid -->
       <div class="product-grid" v-if="!loadingProducts">
+        <!-- UPDATE product-card div -->
         <div
           v-for="product in products"
           :key="product.productId"
           class="product-card"
+          :class="{
+            'product-card-disabled':
+              product.productType !== 'service' && (product.inventory?.quantity ?? 0) === 0,
+          }"
           @click="addToCart(product)"
         >
           <div class="product-card-top">
@@ -435,11 +451,19 @@ onMounted(() => {
               ⚡ Service
             </span>
             <span
+              v-else-if="(product.inventory?.quantity ?? 0) === 0"
+              class="stock-badge stock-out"
+            >
+              🔴 Out
+            </span>
+            <span
               v-else
               class="stock-badge"
               :class="{
-                'stock-low': (product.inventory?.quantity ?? 0) <= 10,
-                'stock-ok': (product.inventory?.quantity ?? 0) > 10,
+                'stock-low':
+                  (product.inventory?.quantity ?? 0) <= (product.inventory?.reorderPoint ?? 10),
+                'stock-ok':
+                  (product.inventory?.quantity ?? 0) > (product.inventory?.reorderPoint ?? 10),
               }"
             >
               {{ product.inventory?.quantity ?? 0 }} left
@@ -1332,5 +1356,21 @@ onMounted(() => {
 .stock-service {
   background: rgba(139, 92, 246, 0.15);
   color: #8b5cf6;
+}
+
+.stock-out {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.product-card-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.product-card-disabled:hover {
+  transform: none;
+  border-color: #334155;
+  background: #1e293b;
 }
 </style>
