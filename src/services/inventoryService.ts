@@ -37,7 +37,9 @@ const inventoryService = {
 
   // GET /api/inventory/low-stock
   async getLowStock(limit = 10): Promise<any> {
-    const response = await api.get('/api/inventory/low-stock', { params: { limit } })
+    const response = await api.get('/api/inventory/low-stock', {
+      params: { limit, _t: Date.now() },
+    })
     return response.data
   },
 

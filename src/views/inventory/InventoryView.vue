@@ -26,8 +26,8 @@ const saving = ref(false)
 const categories = ref<Category[]>([])
 
 // Pagination
-const currentPage = ref(1)
-const pageSize = ref(20)
+const currentPage = ref(0)
+const pageSize = ref(10)
 const totalRecords = ref(0)
 const totalPages = ref(0)
 
@@ -53,10 +53,6 @@ const statusOptions = [
   { label: '🟡 Low Stock', value: 'low' },
   { label: '🔴 Out of Stock', value: 'out_of_stock' },
 ]
-
-// ── Computed ──────────────────────────────────────
-const showingFrom = computed(() => (currentPage.value - 1) * pageSize.value + 1)
-const showingTo = computed(() => Math.min(currentPage.value * pageSize.value, totalRecords.value))
 
 // ── Methods ───────────────────────────────────────
 function getStatusSeverity(status: string) {
@@ -90,7 +86,6 @@ async function loadInventory() {
   try {
     const params: any = {
       page: currentPage.value,
-      limit: pageSize.value,
     }
     if (searchQuery.value) params.search = searchQuery.value
     if (selectedCategory.value) params.category = selectedCategory.value
@@ -133,18 +128,10 @@ function onFilterChange() {
   loadInventory()
 }
 
-function prevPage() {
-  if (currentPage.value > 1) {
-    currentPage.value--
-    loadInventory()
-  }
-}
-
-function nextPage() {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++
-    loadInventory()
-  }
+function onPageChange(event: any) {
+  currentPage.value = event.page + 1
+  pageSize.value = event.rows
+  loadInventory()
 }
 
 function openEditDialog(item: any) {
@@ -260,18 +247,21 @@ onMounted(() => {
 
       <Select
         v-model="selectedCategory"
-        :options="[{ name: 'All Categories', categoryId: '' }, ...categories]"
+        :options="categories"
         optionLabel="name"
         optionValue="name"
+        placeholder="All Categories"
+        showClear
         class="filter-select"
         @change="onFilterChange"
       />
-
       <Select
         v-model="selectedStatus"
         :options="statusOptions"
         optionLabel="label"
         optionValue="value"
+        placeholder="All Status"
+        showClear
         class="filter-select"
         @change="onFilterChange"
       />
@@ -279,7 +269,19 @@ onMounted(() => {
 
     <!-- Inventory Table -->
     <div class="table-card">
-      <DataTable :value="inventory" :loading="loading" stripedRows tableStyle="min-width: 50rem">
+      <DataTable
+        :value="inventory"
+        :loading="loading"
+        lazy
+        paginator
+        :rows="pageSize"
+        :totalRecords="totalRecords"
+        :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
+        @page="onPageChange"
+        stripedRows
+        tableStyle="min-width: 50rem"
+      >
         <template #empty>
           <div class="empty-state">
             <i class="pi pi-warehouse" />
@@ -371,30 +373,6 @@ onMounted(() => {
           </template>
         </Column>
       </DataTable>
-
-      <!-- Pagination -->
-      <div class="pagination-row" v-if="totalRecords > 0">
-        <span class="pagination-info">
-          Showing {{ showingFrom }}–{{ showingTo }} of {{ totalRecords }}
-        </span>
-        <div class="pagination-buttons">
-          <Button
-            label="← Prev"
-            size="small"
-            severity="secondary"
-            :disabled="currentPage === 1"
-            @click="prevPage"
-          />
-          <span class="page-indicator">Page {{ currentPage }} / {{ totalPages }}</span>
-          <Button
-            label="Next →"
-            size="small"
-            severity="secondary"
-            :disabled="currentPage === totalPages"
-            @click="nextPage"
-          />
-        </div>
-      </div>
     </div>
 
     <!-- Edit Stock Dialog -->
