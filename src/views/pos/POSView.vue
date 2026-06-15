@@ -129,8 +129,10 @@ async function searchProducts() {
         }),
       )
 
-      // Only show in-stock products
-      products.value = withInventory.filter((p: any) => (p.inventory?.quantity ?? 0) > 0)
+      // Show in-stock physical products AND all services
+      products.value = withInventory.filter(
+        (p: any) => p.productType === 'service' || (p.inventory?.quantity ?? 0) > 0,
+      )
     }
   } catch {
     toast.add({
@@ -163,8 +165,10 @@ async function loadAllProducts() {
         }),
       )
 
-      // Only show products with stock > 0
-      products.value = withInventory.filter((p: any) => (p.inventory?.quantity ?? 0) > 0)
+      // Show in-stock physical products AND all services
+      products.value = withInventory.filter(
+        (p: any) => p.productType === 'service' || (p.inventory?.quantity ?? 0) > 0,
+      )
     }
   } catch {
     toast.add({
@@ -179,12 +183,24 @@ async function loadAllProducts() {
 }
 
 function addToCart(product: any) {
+  const isService = product.productType === 'service'
   const availableStock = product.inventory?.quantity ?? 0
   const existing = cart.value.find((item) => item.productId === product.productId)
   const currentQty = existing?.quantity ?? 0
 
-  // Check if adding one more would exceed stock
-  if (currentQty >= availableStock) {
+  // Out of stock check
+  if (!isService && availableStock === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Out of Stock',
+      detail: `${product.name} is out of stock`,
+      life: 3000,
+    })
+    return
+  }
+
+  // Only check stock for physical products
+  if (!isService && currentQty >= availableStock) {
     toast.add({
       severity: 'warn',
       summary: 'Stock Limit Reached',
@@ -231,7 +247,9 @@ function updateQuantity(productId: string, quantity: number) {
   const product = products.value.find((p: any) => p.productId === productId)
   const availableStock = product?.inventory?.quantity ?? 0
 
-  if (quantity > availableStock) {
+  const isService =
+    products.value.find((p: any) => p.productId === productId)?.productType === 'service'
+  if (!isService && quantity > availableStock) {
     toast.add({
       severity: 'warn',
       summary: 'Stock Limit',
@@ -414,21 +432,38 @@ onMounted(() => {
 
       <!-- Product Grid -->
       <div class="product-grid" v-if="!loadingProducts">
+        <!-- UPDATE product-card div -->
         <div
           v-for="product in products"
           :key="product.productId"
           class="product-card"
+          :class="{
+            'product-card-disabled':
+              product.productType !== 'service' && (product.inventory?.quantity ?? 0) === 0,
+          }"
           @click="addToCart(product)"
         >
           <div class="product-card-top">
             <div class="product-card-icon">
               <i class="pi pi-box" />
             </div>
+            <span v-if="product.productType === 'service'" class="stock-badge stock-service">
+              ⚡ Service
+            </span>
             <span
+              v-else-if="(product.inventory?.quantity ?? 0) === 0"
+              class="stock-badge stock-out"
+            >
+              🔴 Out
+            </span>
+            <span
+              v-else
               class="stock-badge"
               :class="{
-                'stock-low': (product.inventory?.quantity ?? 0) <= 10,
-                'stock-ok': (product.inventory?.quantity ?? 0) > 10,
+                'stock-low':
+                  (product.inventory?.quantity ?? 0) <= (product.inventory?.reorderPoint ?? 10),
+                'stock-ok':
+                  (product.inventory?.quantity ?? 0) > (product.inventory?.reorderPoint ?? 10),
               }"
             >
               {{ product.inventory?.quantity ?? 0 }} left
@@ -1316,5 +1351,26 @@ onMounted(() => {
   font-size: 0.875rem;
   font-weight: 500;
   color: #cbd5e1;
+}
+
+.stock-service {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+}
+
+.stock-out {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.product-card-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.product-card-disabled:hover {
+  transform: none;
+  border-color: #334155;
+  background: #1e293b;
 }
 </style>

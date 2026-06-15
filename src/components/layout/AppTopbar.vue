@@ -12,7 +12,7 @@ const router = useRouter()
     <!-- Left side - Brand -->
     <div class="topbar-left">
       <i class="pi pi-shopping-cart brand-icon" />
-      <span class="brand-name">ProSystem</span>
+      <span class="brand-name">{{ authStore.shop?.name || 'ProSystem' }}</span>
     </div>
 
     <!-- Right side - User info + Logout -->

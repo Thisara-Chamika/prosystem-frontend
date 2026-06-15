@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import productService from '../services/productService'
 import posService from '../services/posService'
 import inventoryService from '../services/inventoryService'
@@ -24,8 +24,6 @@ const loading = ref(true)
 
 // ── Owner/Manager State ───────────────────────────
 const totalProducts = ref(0)
-const outOfStockCount = ref(0)
-const lowStockCount = ref(0)
 const todayTransactions = ref(0)
 const todayRevenue = ref(0)
 const totalTransactions = ref(0)
@@ -37,6 +35,12 @@ const cashierTodayRevenue = ref(0)
 const cashierAveragePerSale = ref(0)
 const cashierRecentTransactions = ref<any[]>([])
 const cashierError = ref(false)
+
+// Low stock widget
+const lowStockItems = ref<any[]>([])
+const lowStockCount = ref(0)
+const outOfStockCount = ref(0)
+let lowStockInterval: ReturnType<typeof setInterval> | null = null
 
 // ── Today's date display ──────────────────────────
 const todayDisplay = computed(() => {
@@ -78,6 +82,19 @@ function getPaymentIcon(method: string) {
   }
 }
 
+async function loadLowStock() {
+  try {
+    const response = await inventoryService.getLowStock(10)
+    if (response.success) {
+      lowStockItems.value = response.data.items
+      lowStockCount.value = response.data.lowStockCount
+      outOfStockCount.value = response.data.outOfStockCount
+    }
+  } catch {
+    // Silent fail — widget is non-critical
+  }
+}
+
 async function loadOwnerDashboard() {
   loading.value = true
   try {
@@ -85,26 +102,6 @@ async function loadOwnerDashboard() {
     if (productsResponse.success) {
       const activeProducts = productsResponse.data.filter((p: any) => p.isActive)
       totalProducts.value = activeProducts.length
-
-      const withInventory = await Promise.all(
-        activeProducts.map(async (product: any) => {
-          try {
-            const invResponse = await inventoryService.getInventory(product.productId)
-            return invResponse.success ? invResponse.data : { ...product, inventory: null }
-          } catch {
-            return { ...product, inventory: null }
-          }
-        }),
-      )
-
-      outOfStockCount.value = withInventory.filter(
-        (p: any) => (p.inventory?.quantity ?? 0) === 0,
-      ).length
-
-      lowStockCount.value = withInventory.filter((p: any) => {
-        const qty = p.inventory?.quantity ?? 0
-        return qty > 0 && qty <= 10
-      }).length
     }
 
     const txnResponse = await posService.getTransactions(1, 50)
@@ -163,6 +160,14 @@ function loadDashboard() {
 
 onMounted(() => {
   loadDashboard()
+  if (!isCashier.value) {
+    loadLowStock()
+    lowStockInterval = setInterval(loadLowStock, 5 * 60 * 1000)
+  }
+})
+
+onUnmounted(() => {
+  if (lowStockInterval) clearInterval(lowStockInterval)
 })
 </script>
 
@@ -393,6 +398,51 @@ onMounted(() => {
         </div>
 
         <div class="section-label">Recent Transactions</div>
+        <!-- Stock Alerts Widget -->
+        <div class="section-label">Stock Alerts</div>
+
+        <div class="stock-alert-widget" v-if="lowStockCount > 0 || outOfStockCount > 0">
+          <div class="stock-alert-header">
+            <i class="pi pi-exclamation-triangle alert-icon" />
+            <span class="alert-title">Stock Alerts</span>
+          </div>
+          <div class="alert-counts">
+            <span class="alert-count out" v-if="outOfStockCount > 0">
+              🔴 {{ outOfStockCount }} item{{ outOfStockCount > 1 ? 's' : '' }} out of stock
+            </span>
+            <span class="alert-count low" v-if="lowStockCount > 0">
+              🟡 {{ lowStockCount }} item{{ lowStockCount > 1 ? 's' : '' }} running low
+            </span>
+          </div>
+          <div class="alert-items">
+            <div v-for="item in lowStockItems" :key="item.productId" class="alert-item">
+              <div class="alert-item-info">
+                <span class="alert-item-name">{{ item.productName }}</span>
+                <span class="alert-item-sku">{{ item.sku }}</span>
+              </div>
+              <span class="alert-item-qty">{{ item.quantity }} left</span>
+              <Tag
+                :value="item.status === 'out_of_stock' ? 'Out of Stock' : 'Low Stock'"
+                :severity="item.status === 'out_of_stock' ? 'danger' : 'warn'"
+              />
+            </div>
+          </div>
+          <div class="alert-footer">
+            <Button
+              label="View All Inventory"
+              icon="pi pi-arrow-right"
+              iconPos="right"
+              severity="secondary"
+              size="small"
+              @click="router.push('/inventory')"
+            />
+          </div>
+        </div>
+
+        <div class="stock-all-good" v-else>
+          <i class="pi pi-check-circle" />
+          <span>All products are sufficiently stocked</span>
+        </div>
         <div class="table-card">
           <DataTable :value="recentTransactions" stripedRows tableStyle="min-width: 40rem">
             <template #empty>
@@ -737,5 +787,119 @@ onMounted(() => {
 .amount {
   font-weight: 600;
   color: #22c55e;
+}
+
+/* ── Stock Alert Widget ── */
+.stock-alert-widget {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stock-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #334155;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.alert-icon {
+  color: #f59e0b;
+  font-size: 1rem;
+}
+
+.alert-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.alert-counts {
+  display: flex;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #334155;
+}
+
+.alert-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.alert-count.out {
+  color: #ef4444;
+}
+.alert-count.low {
+  color: #f59e0b;
+}
+
+.alert-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #1e293b;
+  background: #0f172a;
+}
+
+.alert-item:last-child {
+  border-bottom: none;
+}
+
+.alert-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.alert-item-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #f1f5f9;
+}
+
+.alert-item-sku {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.alert-item-qty {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  min-width: 50px;
+  text-align: right;
+}
+
+.alert-footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #334155;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stock-all-good {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 12px;
+  font-size: 0.875rem;
+  color: #22c55e;
+}
+
+.stock-all-good .pi {
+  font-size: 1rem;
 }
 </style>

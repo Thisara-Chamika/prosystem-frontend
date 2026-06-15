@@ -335,3 +335,14 @@ export interface ReturnRecord {
     total: string
   }[]
 }
+
+export interface Category {
+  categoryId: string
+  shopId: string
+  name: string
+  description: string | null
+  sortOrder: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}

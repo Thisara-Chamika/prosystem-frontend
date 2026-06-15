@@ -91,7 +91,7 @@ async function loadStaff() {
     const response = await staffService.getStaff(params)
     if (response.success) {
       staff.value = response.data
-      totalRecords.value = response.data.length
+      totalRecords.value = response.pagination?.total ?? response.data.length
     }
   } catch {
     toast.add({
@@ -342,6 +342,7 @@ onMounted(() => {
         :rows="pageSize"
         :totalRecords="totalRecords"
         :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
         @page="onPageChange"
         stripedRows
         tableStyle="min-width: 50rem"

@@ -67,7 +67,7 @@ async function loadCustomers() {
     )
     if (response.success) {
       customers.value = response.data
-      totalRecords.value = response.data.length
+      totalRecords.value = response.pagination?.total ?? response.data.length
     }
   } catch {
     toast.add({
@@ -307,6 +307,7 @@ onMounted(() => {
         :rows="pageSize"
         :totalRecords="totalRecords"
         :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
         @page="onPageChange"
         stripedRows
         tableStyle="min-width: 40rem"

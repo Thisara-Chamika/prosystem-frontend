@@ -9,6 +9,7 @@ import BusinessTypeStep from './steps/BusinessTypeStep.vue'
 import PluginsStep from './steps/PluginsStep.vue'
 import ConfigureStep from './steps/ConfigureStep.vue'
 import { useAuthStore } from '../../stores/authStore'
+import CategoriesPreviewStep from './steps/CategoriesPreviewStep.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -17,6 +18,7 @@ const toast = useToast()
 // ── State ─────────────────────────────────────────
 const currentStep = ref(1)
 const loading = ref(false)
+const showCategoriesPreview = ref(false)
 
 // Step 1 state
 const selectedBusinessType = ref('')
@@ -46,13 +48,14 @@ async function onBusinessTypeSelected(type: string) {
     const response = await shopService.setBusinessType(type)
     if (response.success) {
       selectedBusinessType.value = type
-      // Load available plugins for this business type
+      // Load plugins in background while showing preview
       const pluginsResponse = await shopService.getAvailablePlugins()
       if (pluginsResponse.success) {
         availablePlugins.value = pluginsResponse.data.availablePlugins
         activePlugins.value = pluginsResponse.data.activePlugins
       }
-      currentStep.value = 2
+      // Show categories preview before moving to plugins step
+      showCategoriesPreview.value = true
     }
   } catch (error: any) {
     toast.add({
@@ -88,6 +91,11 @@ async function onPluginToggled(pluginId: string, active: boolean) {
 
 function onPluginsNext() {
   currentStep.value = 3
+}
+
+function onCategoriesPreviewNext() {
+  showCategoriesPreview.value = false
+  currentStep.value = 2
 }
 
 // ── Step 3 handlers ───────────────────────────────
@@ -178,9 +186,16 @@ function goBack() {
     <div class="step-content">
       <!-- Step 1: Business Type -->
       <BusinessTypeStep
-        v-if="currentStep === 1"
+        v-if="currentStep === 1 && !showCategoriesPreview"
         :loading="loading"
         @select="onBusinessTypeSelected"
+      />
+
+      <!-- Step 1.5: Categories Preview -->
+      <CategoriesPreviewStep
+        v-if="currentStep === 1 && showCategoriesPreview"
+        :businessType="selectedBusinessType"
+        @next="onCategoriesPreviewNext"
       />
 
       <!-- Step 2: Plugins -->

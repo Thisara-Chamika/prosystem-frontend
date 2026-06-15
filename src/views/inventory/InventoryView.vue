@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import productService from '../../services/productService'
 import inventoryService from '../../services/inventoryService'
-import type { ProductWithInventory } from '../../types'
+import categoryService from '../../services/categoryService'
+import type { Category } from '../../types'
+import { useAuthStore } from '../../stores/authStore'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -10,67 +11,96 @@ import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 
 const toast = useToast()
+const authStore = useAuthStore()
 
 // ── State ─────────────────────────────────────────
-const products = ref<ProductWithInventory[]>([])
+const inventory = ref<any[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const categories = ref<Category[]>([])
+
+const isOwnerOrManager = computed(
+  () => authStore.userRole === 'shop_owner' || authStore.userRole === 'shop_manager',
+)
+
+// Pagination
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalRecords = ref(0)
+
+// Filters
+const searchQuery = ref('')
+const selectedCategory = ref('')
+const selectedStatus = ref('')
 
 // Edit stock dialog
 const showDialog = ref(false)
-const selectedProduct = ref<ProductWithInventory | null>(null)
+const selectedItem = ref<any>(null)
 const newQuantity = ref(0)
 
-// ── Computed ──────────────────────────────────────
-const totalProducts = computed(() => products.value.length)
-const inStockCount = computed(
-  () => products.value.filter((p) => (p.inventory?.quantity ?? 0) > 10).length,
-)
-const lowStockCount = computed(
-  () =>
-    products.value.filter((p) => {
-      const qty = p.inventory?.quantity ?? 0
-      return qty > 0 && qty <= 10
-    }).length,
-)
-const outOfStockCount = computed(
-  () => products.value.filter((p) => (p.inventory?.quantity ?? 0) === 0).length,
-)
+// Inline reorder edit
+const editingReorderId = ref<string | null>(null)
+const editReorderPoint = ref(0)
+const savingReorder = ref(false)
+
+// ── Options ───────────────────────────────────────
+const statusOptions = [
+  { label: 'All Status', value: '' },
+  { label: '🟢 In Stock', value: 'in_stock' },
+  { label: '🟡 Low Stock', value: 'low' },
+  { label: '🔴 Out of Stock', value: 'out_of_stock' },
+]
 
 // ── Methods ───────────────────────────────────────
-function getStockStatus(quantity: number) {
-  if (quantity === 0) return { label: 'Out of stock', severity: 'danger' }
-  if (quantity <= 10) return { label: 'Low stock', severity: 'warn' }
-  return { label: 'In stock', severity: 'success' }
+function getStatusSeverity(status: string) {
+  switch (status) {
+    case 'in_stock':
+      return 'success'
+    case 'low':
+      return 'warn'
+    case 'out_of_stock':
+      return 'danger'
+    default:
+      return 'secondary'
+  }
+}
+
+function getStatusLabel(status: string) {
+  switch (status) {
+    case 'in_stock':
+      return 'In Stock'
+    case 'low':
+      return 'Low Stock'
+    case 'out_of_stock':
+      return 'Out of Stock'
+    default:
+      return status
+  }
 }
 
 async function loadInventory() {
   loading.value = true
   try {
-    const response = await productService.getProducts(1, 100)
-    if (!response.success) return
+    const params: any = {
+      page: currentPage.value,
+      limit: pageSize.value,
+    }
+    if (searchQuery.value) params.search = searchQuery.value
+    if (selectedCategory.value) params.category = selectedCategory.value
+    if (selectedStatus.value) params.status = selectedStatus.value
 
-    const productList = response.data
-
-    // Filter only active products
-    const activeProducts = productList.filter((p: any) => p.isActive === true)
-
-    const withInventory = await Promise.all(
-      activeProducts.map(async (product: any) => {
-        try {
-          const invResponse = await inventoryService.getInventory(product.productId)
-          return invResponse.success ? invResponse.data : { ...product, inventory: null }
-        } catch {
-          return { ...product, inventory: null }
-        }
-      }),
-    )
-    products.value = withInventory
-  } catch (error) {
+    const response = await inventoryService.getInventoryList(params)
+    if (response.success) {
+      inventory.value = response.data
+      totalRecords.value = response.pagination?.total ?? response.data.length
+    }
+  } catch {
     toast.add({
       severity: 'error',
       summary: 'Error',
@@ -82,17 +112,42 @@ async function loadInventory() {
   }
 }
 
-function openEditDialog(product: ProductWithInventory) {
-  selectedProduct.value = product
-  newQuantity.value = product.inventory?.quantity ?? 0
+async function loadCategories() {
+  try {
+    const response = await categoryService.getCategories()
+    if (response.success) categories.value = response.data
+  } catch {
+    categories.value = []
+  }
+}
+
+function onSearch() {
+  currentPage.value = 1
+  loadInventory()
+}
+
+function onFilterChange() {
+  currentPage.value = 1
+  loadInventory()
+}
+
+function onPageChange(event: any) {
+  currentPage.value = event.page + 1
+  pageSize.value = event.rows
+  loadInventory()
+}
+
+function openEditDialog(item: any) {
+  selectedItem.value = item
+  newQuantity.value = item.quantity
   showDialog.value = true
 }
 
 async function saveStock() {
-  if (!selectedProduct.value) return
+  if (!selectedItem.value) return
   saving.value = true
   try {
-    const response = await inventoryService.updateInventory(selectedProduct.value.productId, {
+    const response = await inventoryService.updateInventory(selectedItem.value.productId, {
       quantity: newQuantity.value,
     })
     if (response.success) {
@@ -117,8 +172,47 @@ async function saveStock() {
   }
 }
 
+function startReorderEdit(item: any) {
+  editingReorderId.value = item.productId
+  editReorderPoint.value = item.reorderPoint ?? 0
+}
+
+function cancelReorderEdit() {
+  editingReorderId.value = null
+}
+
+async function saveReorderPoint(item: any) {
+  savingReorder.value = true
+  try {
+    const response = await inventoryService.updateReorderSettings(item.productId, {
+      reorderPoint: editReorderPoint.value,
+      reorderQuantity: item.reorderQuantity ?? 0,
+    })
+    if (response.success) {
+      editingReorderId.value = null
+      toast.add({
+        severity: 'success',
+        summary: 'Updated',
+        detail: 'Reorder point updated',
+        life: 3000,
+      })
+      loadInventory()
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to update reorder point',
+      life: 3000,
+    })
+  } finally {
+    savingReorder.value = false
+  }
+}
+
 onMounted(() => {
   loadInventory()
+  loadCategories()
 })
 </script>
 
@@ -134,29 +228,63 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
-      <div class="summary-card">
-        <span class="summary-label">Total Products</span>
-        <span class="summary-value">{{ totalProducts }}</span>
+    <!-- Info Note -->
+    <div class="inventory-note">
+      <i class="pi pi-info-circle" />
+      <span
+        >Only physical products appear here. Service items do not require inventory tracking.</span
+      >
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-row">
+      <div class="search-wrapper">
+        <i class="pi pi-search search-icon" />
+        <InputText
+          v-model="searchQuery"
+          placeholder="Search by name or SKU..."
+          class="search-input"
+          @input="onSearch"
+        />
       </div>
-      <div class="summary-card success">
-        <span class="summary-label">In Stock</span>
-        <span class="summary-value">{{ inStockCount }}</span>
-      </div>
-      <div class="summary-card warning">
-        <span class="summary-label">Low Stock</span>
-        <span class="summary-value">{{ lowStockCount }}</span>
-      </div>
-      <div class="summary-card danger">
-        <span class="summary-label">Out of Stock</span>
-        <span class="summary-value">{{ outOfStockCount }}</span>
-      </div>
+
+      <Select
+        v-model="selectedCategory"
+        :options="categories"
+        optionLabel="name"
+        optionValue="name"
+        placeholder="All Categories"
+        showClear
+        class="filter-select"
+        @change="onFilterChange"
+      />
+      <Select
+        v-model="selectedStatus"
+        :options="statusOptions"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="All Status"
+        showClear
+        class="filter-select"
+        @change="onFilterChange"
+      />
     </div>
 
     <!-- Inventory Table -->
     <div class="table-card">
-      <DataTable :value="products" :loading="loading" stripedRows tableStyle="min-width: 50rem">
+      <DataTable
+        :value="inventory"
+        :loading="loading"
+        lazy
+        paginator
+        :rows="pageSize"
+        :totalRecords="totalRecords"
+        :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
+        @page="onPageChange"
+        stripedRows
+        tableStyle="min-width: 50rem"
+      >
         <template #empty>
           <div class="empty-state">
             <i class="pi pi-warehouse" />
@@ -166,7 +294,7 @@ onMounted(() => {
 
         <Column field="sku" header="SKU" style="width: 12%" />
 
-        <Column field="name" header="Product" style="width: 28%" />
+        <Column field="productName" header="Product" style="width: 25%" />
 
         <Column field="category" header="Category" style="width: 15%">
           <template #body="{ data }">
@@ -174,37 +302,79 @@ onMounted(() => {
           </template>
         </Column>
 
-        <Column header="Quantity" style="width: 12%">
+        <Column header="Stock" style="width: 10%">
           <template #body="{ data }">
             <span
               :class="{
-                'qty-danger': (data.inventory?.quantity ?? 0) === 0,
-                'qty-warning':
-                  (data.inventory?.quantity ?? 0) > 0 && (data.inventory?.quantity ?? 0) <= 10,
-                'qty-success': (data.inventory?.quantity ?? 0) > 10,
+                'qty-danger': data.quantity === 0,
+                'qty-warning': data.quantity > 0 && data.quantity <= data.reorderPoint,
+                'qty-success': data.quantity > data.reorderPoint,
               }"
             >
-              {{ data.inventory?.quantity ?? 0 }}
+              {{ data.quantity }}
             </span>
           </template>
         </Column>
 
-        <Column header="Reorder Point" style="width: 12%">
+        <Column header="Reorder Point" style="width: 18%">
           <template #body="{ data }">
-            {{ data.inventory?.reorderPoint ?? 0 }}
+            <div class="reorder-cell">
+              <!-- Owner/Manager: inline edit mode -->
+              <template v-if="isOwnerOrManager && editingReorderId === data.productId">
+                <InputNumber
+                  v-model="editReorderPoint"
+                  :min="0"
+                  class="reorder-input"
+                  :inputStyle="{ width: '70px' }"
+                />
+                <Button
+                  icon="pi pi-check"
+                  size="small"
+                  severity="success"
+                  text
+                  :loading="savingReorder"
+                  @click="saveReorderPoint(data)"
+                />
+                <Button
+                  icon="pi pi-times"
+                  size="small"
+                  severity="danger"
+                  text
+                  @click="cancelReorderEdit"
+                />
+              </template>
+
+              <!-- Owner/Manager: clickable value -->
+              <template v-else-if="isOwnerOrManager">
+                <span
+                  class="reorder-value"
+                  :class="{
+                    'reorder-alert': data.quantity <= data.reorderPoint && data.quantity > 0,
+                  }"
+                  @click="startReorderEdit(data)"
+                  title="Click to edit"
+                >
+                  {{ data.reorderPoint ?? 0 }}
+                  <i class="pi pi-pencil reorder-edit-icon" />
+                </span>
+              </template>
+
+              <!-- Cashier: read only -->
+              <template v-else>
+                <span class="reorder-value-readonly">{{ data.reorderPoint ?? 0 }}</span>
+              </template>
+            </div>
           </template>
         </Column>
 
         <Column header="Status" style="width: 13%">
           <template #body="{ data }">
-            <Tag
-              :value="getStockStatus(data.inventory?.quantity ?? 0).label"
-              :severity="getStockStatus(data.inventory?.quantity ?? 0).severity"
-            />
+            <Tag :value="getStatusLabel(data.status)" :severity="getStatusSeverity(data.status)" />
           </template>
         </Column>
 
-        <Column header="Actions" style="width: 8%">
+        <!-- Actions column — owner/manager only -->
+        <Column v-if="isOwnerOrManager" header="Actions" style="width: 8%">
           <template #body="{ data }">
             <Button
               icon="pi pi-pencil"
@@ -217,20 +387,24 @@ onMounted(() => {
       </DataTable>
     </div>
 
-    <!-- Edit Stock Dialog -->
-    <Dialog v-model:visible="showDialog" header="Update Stock" :style="{ width: '380px' }" modal>
+    <!-- Edit Stock Dialog — owner/manager only -->
+    <Dialog
+      v-if="isOwnerOrManager"
+      v-model:visible="showDialog"
+      header="Update Stock"
+      :style="{ width: '380px' }"
+      modal
+    >
       <div class="dialog-form">
         <div class="product-info">
-          <span class="product-name">{{ selectedProduct?.name }}</span>
-          <span class="product-sku">{{ selectedProduct?.sku }}</span>
+          <span class="product-name">{{ selectedItem?.productName }}</span>
+          <span class="product-sku">{{ selectedItem?.sku }}</span>
         </div>
-
         <div class="field">
           <label>New Quantity</label>
           <InputNumber v-model="newQuantity" :min="0" showButtons class="w-full" />
         </div>
       </div>
-
       <template #footer>
         <Button label="Cancel" severity="secondary" @click="showDialog = false" />
         <Button label="Update Stock" icon="pi pi-check" :loading="saving" @click="saveStock" />
@@ -243,7 +417,7 @@ onMounted(() => {
 .inventory-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .page-header {
@@ -265,45 +439,54 @@ onMounted(() => {
   margin: 0.25rem 0 0;
 }
 
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-}
-
-.summary-card {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  padding: 1.25rem;
+.inventory-note {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
-}
-
-.summary-card.success {
-  border-left: 3px solid #22c55e;
-}
-.summary-card.warning {
-  border-left: 3px solid #f59e0b;
-}
-.summary-card.danger {
-  border-left: 3px solid #ef4444;
-}
-
-.summary-label {
+  padding: 0.6rem 0.75rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
   font-size: 0.8rem;
   color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.summary-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #f1f5f9;
+.inventory-note .pi {
+  color: #3b82f6;
+  flex-shrink: 0;
 }
 
+/* ── Filters ── */
+.filters-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.search-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  z-index: 1;
+}
+
+.search-input {
+  width: 100%;
+  padding-left: 2.25rem !important;
+}
+
+.filter-select {
+  width: 180px;
+}
+
+/* ── Table ── */
 .table-card {
   background: #1e293b;
   border: 1px solid #334155;
@@ -336,6 +519,50 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* ── Reorder Point ── */
+.reorder-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.reorder-value {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.reorder-value:hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.reorder-alert {
+  color: #f59e0b;
+}
+
+.reorder-edit-icon {
+  font-size: 0.7rem;
+  opacity: 0.5;
+}
+
+.reorder-input {
+  width: 90px;
+}
+
+.reorder-value-readonly {
+  color: #64748b;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* ── Dialog ── */
 .dialog-form {
   display: flex;
   flex-direction: column;

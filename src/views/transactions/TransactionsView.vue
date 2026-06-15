@@ -81,7 +81,7 @@ async function loadTransactions() {
       }
 
       transactions.value = data
-      totalRecords.value = data.length
+      totalRecords.value = response.pagination?.total ?? data.length
       await loadCustomerNames(data)
     }
   } catch {
@@ -249,6 +249,7 @@ onMounted(() => {
         :rows="pageSize"
         :totalRecords="totalRecords"
         :rowsPerPageOptions="[10, 25, 50]"
+        :pageLinkSize="3"
         @page="onPageChange"
         stripedRows
         tableStyle="min-width: 50rem"
