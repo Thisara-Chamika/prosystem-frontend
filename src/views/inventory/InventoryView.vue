@@ -25,11 +25,14 @@ const loading = ref(false)
 const saving = ref(false)
 const categories = ref<Category[]>([])
 
+const isOwnerOrManager = computed(
+  () => authStore.userRole === 'shop_owner' || authStore.userRole === 'shop_manager',
+)
+
 // Pagination
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalRecords = ref(0)
-const totalPages = ref(0)
 
 // Filters
 const searchQuery = ref('')
@@ -86,6 +89,7 @@ async function loadInventory() {
   try {
     const params: any = {
       page: currentPage.value,
+      limit: pageSize.value,
     }
     if (searchQuery.value) params.search = searchQuery.value
     if (selectedCategory.value) params.category = selectedCategory.value
@@ -95,7 +99,6 @@ async function loadInventory() {
     if (response.success) {
       inventory.value = response.data
       totalRecords.value = response.pagination?.total ?? response.data.length
-      totalPages.value = response.pagination?.totalPages ?? 1
     }
   } catch {
     toast.add({
@@ -316,7 +319,8 @@ onMounted(() => {
         <Column header="Reorder Point" style="width: 18%">
           <template #body="{ data }">
             <div class="reorder-cell">
-              <template v-if="editingReorderId === data.productId">
+              <!-- Owner/Manager: inline edit mode -->
+              <template v-if="isOwnerOrManager && editingReorderId === data.productId">
                 <InputNumber
                   v-model="editReorderPoint"
                   :min="0"
@@ -339,7 +343,9 @@ onMounted(() => {
                   @click="cancelReorderEdit"
                 />
               </template>
-              <template v-else>
+
+              <!-- Owner/Manager: clickable value -->
+              <template v-else-if="isOwnerOrManager">
                 <span
                   class="reorder-value"
                   :class="{
@@ -352,6 +358,11 @@ onMounted(() => {
                   <i class="pi pi-pencil reorder-edit-icon" />
                 </span>
               </template>
+
+              <!-- Cashier: read only -->
+              <template v-else>
+                <span class="reorder-value-readonly">{{ data.reorderPoint ?? 0 }}</span>
+              </template>
             </div>
           </template>
         </Column>
@@ -362,7 +373,8 @@ onMounted(() => {
           </template>
         </Column>
 
-        <Column header="Actions" style="width: 8%">
+        <!-- Actions column — owner/manager only -->
+        <Column v-if="isOwnerOrManager" header="Actions" style="width: 8%">
           <template #body="{ data }">
             <Button
               icon="pi pi-pencil"
@@ -375,8 +387,14 @@ onMounted(() => {
       </DataTable>
     </div>
 
-    <!-- Edit Stock Dialog -->
-    <Dialog v-model:visible="showDialog" header="Update Stock" :style="{ width: '380px' }" modal>
+    <!-- Edit Stock Dialog — owner/manager only -->
+    <Dialog
+      v-if="isOwnerOrManager"
+      v-model:visible="showDialog"
+      header="Update Stock"
+      :style="{ width: '380px' }"
+      modal
+    >
       <div class="dialog-form">
         <div class="product-info">
           <span class="product-name">{{ selectedItem?.productName }}</span>
@@ -538,29 +556,10 @@ onMounted(() => {
   width: 90px;
 }
 
-/* ── Pagination ── */
-.pagination-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid #334155;
-}
-
-.pagination-info {
-  font-size: 0.8rem;
+.reorder-value-readonly {
   color: #64748b;
-}
-
-.pagination-buttons {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.page-indicator {
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
 }
 
 /* ── Dialog ── */
