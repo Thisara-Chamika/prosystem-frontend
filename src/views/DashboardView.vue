@@ -282,51 +282,6 @@ onUnmounted(() => {
 
         <!-- Recent Transactions -->
         <div class="section-label">My Recent Transactions</div>
-        <!-- Stock Alerts Widget -->
-        <div class="section-label">Stock Alerts</div>
-
-        <div class="stock-alert-widget" v-if="lowStockCount > 0 || outOfStockCount > 0">
-          <div class="stock-alert-header">
-            <i class="pi pi-exclamation-triangle alert-icon" />
-            <span class="alert-title">Stock Alerts</span>
-          </div>
-          <div class="alert-counts">
-            <span class="alert-count out" v-if="outOfStockCount > 0">
-              🔴 {{ outOfStockCount }} item{{ outOfStockCount > 1 ? 's' : '' }} out of stock
-            </span>
-            <span class="alert-count low" v-if="lowStockCount > 0">
-              🟡 {{ lowStockCount }} item{{ lowStockCount > 1 ? 's' : '' }} running low
-            </span>
-          </div>
-          <div class="alert-items">
-            <div v-for="item in lowStockItems" :key="item.productId" class="alert-item">
-              <div class="alert-item-info">
-                <span class="alert-item-name">{{ item.productName }}</span>
-                <span class="alert-item-sku">{{ item.sku }}</span>
-              </div>
-              <span class="alert-item-qty">{{ item.quantity }} left</span>
-              <Tag
-                :value="item.status === 'out_of_stock' ? 'Out of Stock' : 'Low Stock'"
-                :severity="item.status === 'out_of_stock' ? 'danger' : 'warn'"
-              />
-            </div>
-          </div>
-          <div class="alert-footer">
-            <Button
-              label="View All Inventory"
-              icon="pi pi-arrow-right"
-              iconPos="right"
-              severity="secondary"
-              size="small"
-              @click="router.push('/inventory')"
-            />
-          </div>
-        </div>
-
-        <div class="stock-all-good" v-else>
-          <i class="pi pi-check-circle" />
-          <span>All products are sufficiently stocked</span>
-        </div>
         <div class="table-card">
           <DataTable :value="cashierRecentTransactions" stripedRows tableStyle="min-width: 30rem">
             <template #empty>
@@ -443,6 +398,51 @@ onUnmounted(() => {
         </div>
 
         <div class="section-label">Recent Transactions</div>
+        <!-- Stock Alerts Widget -->
+        <div class="section-label">Stock Alerts</div>
+
+        <div class="stock-alert-widget" v-if="lowStockCount > 0 || outOfStockCount > 0">
+          <div class="stock-alert-header">
+            <i class="pi pi-exclamation-triangle alert-icon" />
+            <span class="alert-title">Stock Alerts</span>
+          </div>
+          <div class="alert-counts">
+            <span class="alert-count out" v-if="outOfStockCount > 0">
+              🔴 {{ outOfStockCount }} item{{ outOfStockCount > 1 ? 's' : '' }} out of stock
+            </span>
+            <span class="alert-count low" v-if="lowStockCount > 0">
+              🟡 {{ lowStockCount }} item{{ lowStockCount > 1 ? 's' : '' }} running low
+            </span>
+          </div>
+          <div class="alert-items">
+            <div v-for="item in lowStockItems" :key="item.productId" class="alert-item">
+              <div class="alert-item-info">
+                <span class="alert-item-name">{{ item.productName }}</span>
+                <span class="alert-item-sku">{{ item.sku }}</span>
+              </div>
+              <span class="alert-item-qty">{{ item.quantity }} left</span>
+              <Tag
+                :value="item.status === 'out_of_stock' ? 'Out of Stock' : 'Low Stock'"
+                :severity="item.status === 'out_of_stock' ? 'danger' : 'warn'"
+              />
+            </div>
+          </div>
+          <div class="alert-footer">
+            <Button
+              label="View All Inventory"
+              icon="pi pi-arrow-right"
+              iconPos="right"
+              severity="secondary"
+              size="small"
+              @click="router.push('/inventory')"
+            />
+          </div>
+        </div>
+
+        <div class="stock-all-good" v-else>
+          <i class="pi pi-check-circle" />
+          <span>All products are sufficiently stocked</span>
+        </div>
         <div class="table-card">
           <DataTable :value="recentTransactions" stripedRows tableStyle="min-width: 40rem">
             <template #empty>
