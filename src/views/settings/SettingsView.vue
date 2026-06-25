@@ -5,6 +5,7 @@ import shopService from '../../services/shopService'
 import { useAuthStore } from '../../stores/authStore'
 import categoryService from '../../services/categoryService'
 import type { Category } from '../../types'
+import pluginService from '../../services/pluginService'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -60,6 +61,20 @@ const newCategoryName = ref('')
 const editCategoryName = ref('')
 const showCategoryErrorDialog = ref(false)
 const categoryErrorMessage = ref('')
+
+// Plugins tab
+const plugins = ref<any[]>([])
+const loadingPlugins = ref(false)
+const installingPlugin = ref<string | null>(null)
+const uninstallingPlugin = ref<string | null>(null)
+const showInstallDialog = ref(false)
+const showUninstallDialog = ref(false)
+const showConfigureDialog = ref(false)
+const selectedPlugin = ref<any>(null)
+const pluginConfig = ref<any>(null)
+const savingConfig = ref(false)
+const newSize = ref('')
+const newColor = ref('')
 
 // ── Options ───────────────────────────────────────
 const currencyOptions = [
@@ -344,6 +359,158 @@ async function onDragEnd(event: any) {
   }
 }
 
+async function loadPlugins() {
+  loadingPlugins.value = true
+  try {
+    const response = await pluginService.getPlugins()
+    if (response.success) plugins.value = response.data
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load plugins', life: 3000 })
+  } finally {
+    loadingPlugins.value = false
+  }
+}
+
+function confirmInstall(plugin: any) {
+  selectedPlugin.value = plugin
+  showInstallDialog.value = true
+}
+
+async function installPlugin() {
+  if (!selectedPlugin.value) return
+  installingPlugin.value = selectedPlugin.value.id
+  showInstallDialog.value = false
+  try {
+    const response = await pluginService.installPlugin(selectedPlugin.value.id)
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Installed',
+        detail: `${selectedPlugin.value.name} installed successfully!`,
+        life: 3000,
+      })
+      // Reload shop data so activePlugins updates and sidebar reacts
+      const shopResponse = await shopService.getSettings()
+      if (shopResponse.success && authStore.shop) {
+        authStore.shop.activePlugins = shopResponse.data.activePlugins
+      }
+      await loadPlugins()
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to install plugin',
+      life: 3000,
+    })
+  } finally {
+    installingPlugin.value = null
+  }
+}
+
+function confirmUninstall(plugin: any) {
+  selectedPlugin.value = plugin
+  showUninstallDialog.value = true
+}
+
+async function uninstallPlugin() {
+  if (!selectedPlugin.value) return
+  uninstallingPlugin.value = selectedPlugin.value.id
+  showUninstallDialog.value = false
+  try {
+    const response = await pluginService.uninstallPlugin(selectedPlugin.value.id)
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Uninstalled',
+        detail: 'Plugin uninstalled',
+        life: 3000,
+      })
+      const shopResponse = await shopService.getSettings()
+      if (shopResponse.success && authStore.shop) {
+        authStore.shop.activePlugins = shopResponse.data.activePlugins
+      }
+      await loadPlugins()
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to uninstall plugin',
+      life: 3000,
+    })
+  } finally {
+    uninstallingPlugin.value = null
+  }
+}
+
+async function openConfigure(plugin: any) {
+  selectedPlugin.value = plugin
+  showConfigureDialog.value = true
+  try {
+    const response = await pluginService.getPluginConfig(plugin.id)
+    if (response.success) {
+      pluginConfig.value = {
+        sizes: [...(response.data.configuration?.sizes || [])],
+        colors: [...(response.data.configuration?.colors || [])],
+      }
+    }
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load config', life: 3000 })
+  }
+}
+
+function addSize() {
+  const s = newSize.value.trim().toUpperCase()
+  if (!s || pluginConfig.value.sizes.includes(s)) return
+  pluginConfig.value.sizes.push(s)
+  newSize.value = ''
+}
+
+function removeSize(size: string) {
+  pluginConfig.value.sizes = pluginConfig.value.sizes.filter((s: string) => s !== size)
+}
+
+function addColor() {
+  const c = newColor.value.trim()
+  if (!c || pluginConfig.value.colors.includes(c)) return
+  pluginConfig.value.colors.push(c)
+  newColor.value = ''
+}
+
+function removeColor(color: string) {
+  pluginConfig.value.colors = pluginConfig.value.colors.filter((c: string) => c !== color)
+}
+
+async function saveConfig() {
+  if (!selectedPlugin.value || !pluginConfig.value) return
+  savingConfig.value = true
+  try {
+    const response = await pluginService.updatePluginConfig(
+      selectedPlugin.value.id,
+      pluginConfig.value,
+    )
+    if (response.success) {
+      showConfigureDialog.value = false
+      toast.add({
+        severity: 'success',
+        summary: 'Saved',
+        detail: 'Plugin configuration updated',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to save config',
+      life: 3000,
+    })
+  } finally {
+    savingConfig.value = false
+  }
+}
+
 onBeforeUnmount(() => {
   document.documentElement.style.setProperty('--ps-primary', originalColor.value)
 })
@@ -351,6 +518,7 @@ onBeforeUnmount(() => {
 onMounted(() => {
   loadSettings()
   loadCategories()
+  loadPlugins()
 })
 </script>
 
@@ -379,7 +547,8 @@ onMounted(() => {
           <Tab value="0">General</Tab>
           <Tab value="1">Branding</Tab>
           <Tab value="2">Categories</Tab>
-          <Tab value="3">Audit Log</Tab>
+          <Tab value="3">Plugins</Tab>
+          <Tab value="4">Audit Log</Tab>
         </TabList>
 
         <TabPanels>
@@ -605,8 +774,78 @@ onMounted(() => {
             </div>
           </TabPanel>
 
-          <!-- ── Tab 4: Audit Log ── -->
+          <!-- ── Tab 4: Plugins ── -->
           <TabPanel value="3">
+            <div class="tab-content">
+              <div class="loading-state" v-if="loadingPlugins">
+                <i class="pi pi-spin pi-spinner" />
+                <p>Loading plugins...</p>
+              </div>
+
+              <div class="plugin-list" v-else>
+                <div v-for="plugin in plugins" :key="plugin.id" class="plugin-card">
+                  <div class="plugin-header">
+                    <div class="plugin-icon">{{ plugin.icon }}</div>
+                    <div class="plugin-info">
+                      <span class="plugin-name">{{ plugin.name }}</span>
+                      <span class="plugin-version">v{{ plugin.version }}</span>
+                    </div>
+                    <div class="plugin-status">
+                      <span v-if="plugin.isInstalled" class="status-badge installed">
+                        <i class="pi pi-check-circle" /> Installed
+                      </span>
+                    </div>
+                  </div>
+
+                  <p class="plugin-desc">{{ plugin.description }}</p>
+
+                  <div class="plugin-features">
+                    <div v-for="feature in plugin.features" :key="feature" class="plugin-feature">
+                      <i class="pi pi-check" />
+                      <span>{{ feature }}</span>
+                    </div>
+                  </div>
+
+                  <div class="plugin-actions">
+                    <template v-if="plugin.isInstalled">
+                      <Button
+                        label="Configure"
+                        icon="pi pi-cog"
+                        severity="secondary"
+                        size="small"
+                        @click="openConfigure(plugin)"
+                      />
+                      <Button
+                        label="Uninstall"
+                        icon="pi pi-trash"
+                        severity="danger"
+                        size="small"
+                        :loading="uninstallingPlugin === plugin.id"
+                        @click="confirmUninstall(plugin)"
+                      />
+                    </template>
+                    <template v-else>
+                      <Button
+                        label="Install"
+                        icon="pi pi-download"
+                        size="small"
+                        :loading="installingPlugin === plugin.id"
+                        @click="confirmInstall(plugin)"
+                      />
+                    </template>
+                  </div>
+                </div>
+
+                <div v-if="plugins.length === 0" class="empty-plugins">
+                  <i class="pi pi-puzzle" />
+                  <p>No plugins available</p>
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+
+          <!-- ── Tab 5: Audit Log ── -->
+          <TabPanel value="4">
             <div class="tab-content">
               <div class="coming-soon">
                 <i class="pi pi-shield coming-soon-icon" />
@@ -706,6 +945,106 @@ onMounted(() => {
       </div>
       <template #footer>
         <Button label="OK" @click="showCategoryErrorDialog = false" />
+      </template>
+    </Dialog>
+    <!-- Install Confirmation -->
+    <Dialog
+      v-model:visible="showInstallDialog"
+      header="Install Plugin?"
+      :style="{ width: '420px' }"
+      modal
+    >
+      <div class="warning-dialog">
+        <span style="font-size: 2rem">{{ selectedPlugin?.icon }}</span>
+        <p>
+          Install <strong>{{ selectedPlugin?.name }}</strong
+          >?
+        </p>
+        <p class="warning-note">This will add new features to your shop immediately.</p>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showInstallDialog = false" />
+        <Button label="Install Plugin" icon="pi pi-download" @click="installPlugin" />
+      </template>
+    </Dialog>
+
+    <!-- Uninstall Confirmation -->
+    <Dialog
+      v-model:visible="showUninstallDialog"
+      header="Uninstall Plugin?"
+      :style="{ width: '420px' }"
+      modal
+    >
+      <div class="warning-dialog">
+        <i class="pi pi-exclamation-triangle warning-icon" />
+        <p>
+          Uninstall <strong>{{ selectedPlugin?.name }}</strong
+          >?
+        </p>
+        <p class="warning-note">
+          Your variant data will be preserved but variants will no longer appear at checkout.
+        </p>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showUninstallDialog = false" />
+        <Button label="Uninstall" severity="danger" @click="uninstallPlugin" />
+      </template>
+    </Dialog>
+
+    <!-- Configure Dialog -->
+    <Dialog
+      v-model:visible="showConfigureDialog"
+      header="Configure Plugin"
+      :style="{ width: '500px' }"
+      modal
+    >
+      <div class="config-form" v-if="pluginConfig">
+        <div class="config-section">
+          <h4 class="config-label">Sizes</h4>
+          <div class="tag-list">
+            <span v-for="size in pluginConfig.sizes" :key="size" class="config-tag">
+              {{ size }}
+              <button class="tag-remove" @click="removeSize(size)">×</button>
+            </span>
+          </div>
+          <div class="tag-add-row">
+            <InputText
+              v-model="newSize"
+              placeholder="Add size (e.g. XXS)"
+              class="tag-input"
+              @keyup.enter="addSize"
+            />
+            <Button label="Add" size="small" severity="secondary" @click="addSize" />
+          </div>
+        </div>
+
+        <div class="config-section">
+          <h4 class="config-label">Colors</h4>
+          <div class="tag-list">
+            <span v-for="color in pluginConfig.colors" :key="color" class="config-tag">
+              {{ color }}
+              <button class="tag-remove" @click="removeColor(color)">×</button>
+            </span>
+          </div>
+          <div class="tag-add-row">
+            <InputText
+              v-model="newColor"
+              placeholder="Add color (e.g. Purple)"
+              class="tag-input"
+              @keyup.enter="addColor"
+            />
+            <Button label="Add" size="small" severity="secondary" @click="addColor" />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showConfigureDialog = false" />
+        <Button
+          label="Save Configuration"
+          icon="pi pi-check"
+          :loading="savingConfig"
+          @click="saveConfig"
+        />
       </template>
     </Dialog>
   </div>
@@ -1115,5 +1454,176 @@ onMounted(() => {
   font-size: 0.875rem;
   font-weight: 500;
   color: #cbd5e1;
+}
+
+/* ── Plugins ── */
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 1.25rem;
+}
+
+.plugin-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plugin-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.plugin-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.plugin-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.plugin-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.plugin-version {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+}
+
+.status-badge.installed {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.plugin-desc {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.plugin-features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.plugin-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.plugin-feature .pi {
+  color: #22c55e;
+  font-size: 0.75rem;
+}
+
+.plugin-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #334155;
+}
+
+.empty-plugins {
+  text-align: center;
+  padding: 3rem;
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.empty-plugins i {
+  font-size: 3rem;
+}
+
+/* ── Config ── */
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0;
+}
+
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.config-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.config-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #334155;
+  color: #f1f5f9;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.tag-remove:hover {
+  color: #ef4444;
+}
+
+.tag-add-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tag-input {
+  flex: 1;
 }
 </style>
