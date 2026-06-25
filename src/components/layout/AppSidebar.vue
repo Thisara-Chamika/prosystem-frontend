@@ -8,7 +8,8 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const menuItems = computed(() => {
-  const items = [
+  const role = authStore.userRole
+  const items: { label: string; icon: string; route: string }[] = [
     { label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' },
     { label: 'Customers', icon: 'pi pi-users', route: '/customers' },
     { label: 'POS', icon: 'pi pi-shopping-cart', route: '/pos' },
@@ -16,12 +17,17 @@ const menuItems = computed(() => {
     { label: 'Inventory', icon: 'pi pi-warehouse', route: '/inventory' },
   ]
 
-  if (authStore.userRole === 'shop_owner' || authStore.userRole === 'shop_manager') {
+  if (role === 'shop_owner' || role === 'shop_manager') {
     items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
     items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })
+
+    // Fashion plugin — show Variants if plugin is active
+    if (authStore.hasPlugin('fashion-shop')) {
+      items.push({ label: 'Variants', icon: 'pi pi-tag', route: '/variants' })
+    }
   }
 
-  if (authStore.userRole === 'shop_owner') {
+  if (role === 'shop_owner') {
     items.push({ label: 'Staff', icon: 'pi pi-id-card', route: '/staff' })
     items.push({ label: 'Settings', icon: 'pi pi-cog', route: '/settings' })
   }
