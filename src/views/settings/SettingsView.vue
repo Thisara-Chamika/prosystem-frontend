@@ -1361,7 +1361,7 @@ onMounted(() => {
 }
 
 .warning-dialog p {
-  color: #cbd5e1;
+  color: #475569;
   font-size: 0.875rem;
   margin: 0;
   line-height: 1.5;
@@ -1369,7 +1369,7 @@ onMounted(() => {
 
 .warning-note {
   font-weight: 600;
-  color: #f1f5f9 !important;
+  color: #1e293b !important;
 }
 
 .w-full {
