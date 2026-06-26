@@ -6,6 +6,8 @@ import { useAuthStore } from '../../stores/authStore'
 import categoryService from '../../services/categoryService'
 import type { Category } from '../../types'
 import pluginService from '../../services/pluginService'
+import auditLogService from '../../services/auditLogService'
+import staffService from '../../services/staffService'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -75,6 +77,47 @@ const pluginConfig = ref<any>(null)
 const savingConfig = ref(false)
 const newSize = ref('')
 const newColor = ref('')
+
+// Audit Log tab
+const auditSummary = ref<any>(null)
+const auditLogs = ref<any[]>([])
+const loadingAudit = ref(false)
+const auditCurrentPage = ref(1)
+const auditTotalRecords = ref(0)
+const auditTotalPages = ref(0)
+const auditPageSize = 20
+
+// Audit filters
+const auditActionFilter = ref('')
+const auditUserFilter = ref('')
+const auditFromDate = ref('')
+const auditToDate = ref('')
+const staffList = ref<any[]>([])
+const auditTabOpened = ref(false)
+
+const actionOptions = [
+  { label: 'All Actions', value: '' },
+  { label: '── Financial ──', value: '', disabled: true },
+  { label: 'Return Initiated', value: 'RETURN_INITIATED' },
+  { label: 'Return Approved', value: 'RETURN_APPROVED' },
+  { label: '── Staff ──', value: '', disabled: true },
+  { label: 'Staff Created', value: 'STAFF_CREATED' },
+  { label: 'Staff Updated', value: 'STAFF_UPDATED' },
+  { label: 'Staff Deactivated', value: 'STAFF_DEACTIVATED' },
+  { label: '── Products ──', value: '', disabled: true },
+  { label: 'Product Created', value: 'PRODUCT_CREATED' },
+  { label: 'Product Updated', value: 'PRODUCT_UPDATED' },
+  { label: 'Product Deleted', value: 'PRODUCT_DELETED' },
+  { label: 'Inventory Adjusted', value: 'INVENTORY_ADJUSTED' },
+  { label: '── System ──', value: '', disabled: true },
+  { label: 'Settings Updated', value: 'SETTINGS_UPDATED' },
+  { label: 'Plugin Installed', value: 'PLUGIN_INSTALLED' },
+  { label: 'Plugin Uninstalled', value: 'PLUGIN_UNINSTALLED' },
+  { label: 'Category Created', value: 'CATEGORY_CREATED' },
+  { label: 'Category Deleted', value: 'CATEGORY_DELETED' },
+  { label: '── Auth ──', value: '', disabled: true },
+  { label: 'Login', value: 'LOGIN_SUCCESS' },
+]
 
 // ── Options ───────────────────────────────────────
 const currencyOptions = [
@@ -511,6 +554,176 @@ async function saveConfig() {
   }
 }
 
+function getDefaultDateRange() {
+  const tz = authStore.shop?.timezone || 'UTC'
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString(
+    'en-CA',
+    { timeZone: tz },
+  )
+  return { from: thirtyDaysAgo, to: today }
+}
+
+function formatAuditTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const tz = authStore.shop?.timezone || 'UTC'
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
+  const logDate = date.toLocaleDateString('en-CA', { timeZone: tz })
+
+  if (logDate === today) {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: tz,
+    }).format(date)
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: tz,
+  }).format(date)
+}
+
+function getActionColor(action: string): string {
+  const destructive = [
+    'STAFF_DEACTIVATED',
+    'PRODUCT_DELETED',
+    'PLUGIN_UNINSTALLED',
+    'CATEGORY_DELETED',
+  ]
+  const creation = ['STAFF_CREATED', 'PRODUCT_CREATED', 'PLUGIN_INSTALLED', 'CATEGORY_CREATED']
+  const financial = ['RETURN_INITIATED', 'RETURN_APPROVED']
+  const changes = ['SETTINGS_UPDATED', 'PRODUCT_UPDATED', 'INVENTORY_ADJUSTED', 'STAFF_UPDATED']
+
+  if (destructive.includes(action)) return 'red'
+  if (creation.includes(action)) return 'green'
+  if (financial.includes(action)) return 'blue'
+  if (changes.includes(action)) return 'yellow'
+  return 'grey'
+}
+
+function getActionDescription(log: any): string {
+  const d = log.details || {}
+  switch (log.action) {
+    case 'STAFF_CREATED':
+      return `Added ${d.role || 'staff'}: ${d.firstName || ''} ${d.lastName || ''}`.trim()
+    case 'STAFF_UPDATED':
+      return 'Updated staff member details'
+    case 'STAFF_DEACTIVATED':
+      return `Deactivated: ${d.deactivatedUser || 'staff member'}`
+    case 'RETURN_INITIATED':
+      return `Return initiated — ${d.itemCount || ''} item(s)`
+    case 'RETURN_APPROVED':
+      return `Return approved — ${authStore.formatCurrency(d.totalRefund || 0)}`
+    case 'SETTINGS_UPDATED':
+      return 'Shop settings updated'
+    case 'PRODUCT_CREATED':
+      return `Created product: ${d.name || ''} (${d.sku || ''})`
+    case 'PRODUCT_UPDATED':
+      return 'Updated product details'
+    case 'PRODUCT_DELETED':
+      return `Deleted product: ${d.name || ''}`
+    case 'INVENTORY_ADJUSTED':
+      return 'Stock adjusted for product'
+    case 'PLUGIN_INSTALLED':
+      return `Installed plugin: ${log.entityId || ''}`
+    case 'PLUGIN_UNINSTALLED':
+      return `Uninstalled plugin: ${log.entityId || ''}`
+    case 'LOGIN_SUCCESS':
+      return 'Logged in successfully'
+    case 'CATEGORY_CREATED':
+      return `Created category: ${d.name || ''}`
+    case 'CATEGORY_DELETED':
+      return `Deleted category: ${d.name || ''}`
+    default:
+      return log.action.replace(/_/g, ' ').toLowerCase()
+  }
+}
+
+function getUserDisplay(log: any): string {
+  if (!log.user) return 'System'
+  const roleMap: Record<string, string> = {
+    shop_owner: 'Owner',
+    shop_manager: 'Manager',
+    cashier: 'Cashier',
+  }
+  return `${log.user.firstName} (${roleMap[log.user.role] || log.user.role})`
+}
+
+async function loadAuditSummary() {
+  try {
+    const response = await auditLogService.getSummary()
+    if (response.success) auditSummary.value = response.data
+  } catch {
+    // silent fail
+  }
+}
+
+async function loadAuditLogs(page = 1) {
+  loadingAudit.value = true
+  try {
+    const params: any = {
+      page,
+      limit: auditPageSize,
+      fromDate: auditFromDate.value,
+      toDate: auditToDate.value,
+    }
+    if (auditActionFilter.value) params.action = auditActionFilter.value
+    if (auditUserFilter.value) params.userId = auditUserFilter.value
+
+    const response = await auditLogService.getLogs(params)
+    if (response.success) {
+      auditLogs.value = response.data
+      auditCurrentPage.value = response.pagination?.page ?? 1
+      auditTotalRecords.value = response.pagination?.total ?? 0
+      auditTotalPages.value = response.pagination?.totalPages ?? 1
+    }
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load audit logs',
+      life: 3000,
+    })
+  } finally {
+    loadingAudit.value = false
+  }
+}
+
+async function loadStaffList() {
+  try {
+    const response = await staffService.getStaff()
+    if (response.success) staffList.value = response.data
+  } catch {
+    staffList.value = []
+  }
+}
+
+function applyAuditFilters() {
+  auditCurrentPage.value = 1
+  loadAuditLogs(1)
+}
+
+function clearAuditFilters() {
+  auditActionFilter.value = ''
+  auditUserFilter.value = ''
+  const { from, to } = getDefaultDateRange()
+  auditFromDate.value = from
+  auditToDate.value = to
+  loadAuditLogs(1)
+}
+
+async function onAuditTabOpen() {
+  if (auditTabOpened.value) return
+  auditTabOpened.value = true
+  const { from, to } = getDefaultDateRange()
+  auditFromDate.value = from
+  auditToDate.value = to
+  await Promise.all([loadAuditSummary(), loadAuditLogs(1), loadStaffList()])
+}
+
 onBeforeUnmount(() => {
   document.documentElement.style.setProperty('--ps-primary', originalColor.value)
 })
@@ -846,14 +1059,121 @@ onMounted(() => {
 
           <!-- ── Tab 5: Audit Log ── -->
           <TabPanel value="4">
-            <div class="tab-content">
-              <div class="coming-soon">
-                <i class="pi pi-shield coming-soon-icon" />
-                <h3>Coming Soon</h3>
-                <p>Audit log viewer will be available in the next update.</p>
-                <p class="coming-soon-desc">
-                  Track all changes made to your shop — staff actions, settings changes, and more.
-                </p>
+            <div class="tab-content" @vue:mounted="onAuditTabOpen">
+              <!-- Summary Cards -->
+              <div class="audit-summary-grid">
+                <div class="audit-summary-card">
+                  <span class="audit-summary-value">{{ auditSummary?.totalActions ?? '—' }}</span>
+                  <span class="audit-summary-label">Total Actions</span>
+                </div>
+                <div class="audit-summary-card">
+                  <span class="audit-summary-value">{{ auditSummary?.todayActions ?? '—' }}</span>
+                  <span class="audit-summary-label">Today's Actions</span>
+                </div>
+                <div class="audit-summary-card">
+                  <span class="audit-summary-value">
+                    {{ auditSummary?.mostActiveUser?.name ?? '—' }}
+                  </span>
+                  <span class="audit-summary-label">Most Active User</span>
+                </div>
+              </div>
+
+              <!-- Filters -->
+              <div class="audit-filters">
+                <Select
+                  v-model="auditActionFilter"
+                  :options="actionOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  optionDisabled="disabled"
+                  placeholder="All Actions"
+                  showClear
+                  class="audit-filter-select"
+                />
+
+                <Select
+                  v-model="auditUserFilter"
+                  :options="staffList"
+                  :optionLabel="(s) => `${s.firstName} ${s.lastName}`"
+                  optionValue="userId"
+                  placeholder="All Users"
+                  showClear
+                  class="audit-filter-select"
+                />
+
+                <input type="date" v-model="auditFromDate" class="audit-date-input" />
+                <span class="date-sep">to</span>
+                <input type="date" v-model="auditToDate" class="audit-date-input" />
+
+                <Button label="Apply" icon="pi pi-check" size="small" @click="applyAuditFilters" />
+                <Button
+                  label="Clear"
+                  icon="pi pi-times"
+                  size="small"
+                  severity="secondary"
+                  @click="clearAuditFilters"
+                />
+              </div>
+
+              <!-- Loading -->
+              <div class="loading-state" v-if="loadingAudit">
+                <i class="pi pi-spin pi-spinner" />
+                <p>Loading activity...</p>
+              </div>
+
+              <!-- Empty -->
+              <div class="empty-audit" v-else-if="auditLogs.length === 0">
+                <i class="pi pi-history" />
+                <p>No activity recorded for this period</p>
+              </div>
+
+              <!-- Log List -->
+              <div class="audit-log-list" v-else>
+                <div v-for="log in auditLogs" :key="log.logId" class="audit-log-item">
+                  <div class="audit-dot" :class="`audit-dot-${getActionColor(log.action)}`" />
+                  <div class="audit-log-content">
+                    <div class="audit-log-header">
+                      <span class="audit-time">{{ formatAuditTime(log.createdAt) }}</span>
+                      <span class="audit-user">{{ getUserDisplay(log) }}</span>
+                      <span
+                        class="audit-action-badge"
+                        :class="`audit-badge-${getActionColor(log.action)}`"
+                      >
+                        {{ log.action.replace(/_/g, ' ') }}
+                      </span>
+                    </div>
+                    <div class="audit-description">{{ getActionDescription(log) }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pagination -->
+              <div class="audit-pagination" v-if="auditTotalRecords > 0 && !loadingAudit">
+                <span class="audit-pagination-info">
+                  Showing {{ (auditCurrentPage - 1) * auditPageSize + 1 }}–{{
+                    Math.min(auditCurrentPage * auditPageSize, auditTotalRecords)
+                  }}
+                  of {{ auditTotalRecords }}
+                </span>
+                <div class="audit-pagination-buttons">
+                  <Button
+                    label="← Prev"
+                    size="small"
+                    severity="secondary"
+                    :disabled="auditCurrentPage === 1"
+                    @click="loadAuditLogs(auditCurrentPage - 1)"
+                  />
+                  <span class="audit-page-indicator"
+                    >Page {{ auditCurrentPage }} / {{ auditTotalPages }}</span
+                  >
+                  <Button
+                    label="Next →"
+                    size="small"
+                    severity="secondary"
+                    :disabled="auditCurrentPage === auditTotalPages"
+                    @click="loadAuditLogs(auditCurrentPage + 1)"
+                  />
+                </div>
               </div>
             </div>
           </TabPanel>
@@ -1625,5 +1945,214 @@ onMounted(() => {
 
 .tag-input {
   flex: 1;
+}
+
+/* ── Audit Log ── */
+.audit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  padding-top: 1.25rem;
+}
+
+.audit-summary-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.audit-summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-summary-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.audit-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+.audit-filter-select {
+  width: 180px;
+}
+
+.audit-date-input {
+  padding: 0.5rem 0.75rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+}
+
+.audit-date-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.date-sep {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.audit-log-list {
+  display: flex;
+  flex-direction: column;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.audit-log-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #334155;
+}
+
+.audit-log-item:last-child {
+  border-bottom: none;
+}
+
+.audit-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.35rem;
+}
+
+.audit-dot-green {
+  background: #22c55e;
+}
+.audit-dot-red {
+  background: #ef4444;
+}
+.audit-dot-blue {
+  background: #3b82f6;
+}
+.audit-dot-yellow {
+  background: #f59e0b;
+}
+.audit-dot-grey {
+  background: #64748b;
+}
+
+.audit-log-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.audit-log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.audit-time {
+  font-size: 0.8rem;
+  color: #64748b;
+  min-width: 100px;
+}
+
+.audit-user {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.audit-action-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.audit-badge-green {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+.audit-badge-red {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+.audit-badge-blue {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+.audit-badge-yellow {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+.audit-badge-grey {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+}
+
+.audit-description {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.empty-audit {
+  text-align: center;
+  padding: 3rem;
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.empty-audit i {
+  font-size: 3rem;
+}
+
+.audit-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.5rem;
+}
+
+.audit-pagination-info {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.audit-pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.audit-page-indicator {
+  font-size: 0.8rem;
+  color: #94a3b8;
 }
 </style>
