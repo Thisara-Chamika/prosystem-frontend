@@ -18,7 +18,6 @@ const password = ref('')
 const router = useRouter()
 
 async function handleLogin() {
-  console.log('handleLogin called!', email.value, password.value)
   if (!email.value || !password.value) return
   await authStore.login(email.value, password.value)
 }
