@@ -8,6 +8,7 @@ import type { Category } from '../../types'
 import pluginService from '../../services/pluginService'
 import auditLogService from '../../services/auditLogService'
 import staffService from '../../services/staffService'
+import loyaltyService from '../../services/loyaltyService'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -118,6 +119,18 @@ const actionOptions = [
   { label: '── Auth ──', value: '', disabled: true },
   { label: 'Login', value: 'LOGIN_SUCCESS' },
 ]
+
+// Loyalty tab
+const loyaltySettings = ref<any>({
+  isEnabled: false,
+  pointsPer100: 1,
+  pointsToRedeem: 100,
+  redeemValue: 50,
+  silverThreshold: 501,
+  goldThreshold: 2001,
+})
+const savingLoyalty = ref(false)
+const loyaltyTabOpened = ref(false)
 
 // ── Options ───────────────────────────────────────
 const currencyOptions = [
@@ -724,6 +737,48 @@ async function onAuditTabOpen() {
   await Promise.all([loadAuditSummary(), loadAuditLogs(1), loadStaffList()])
 }
 
+async function loadLoyaltySettingsTab() {
+  if (loyaltyTabOpened.value) return
+  loyaltyTabOpened.value = true
+  try {
+    const response = await loyaltyService.getLoyaltySettings()
+    if (response.success) loyaltySettings.value = response.data
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load loyalty settings',
+      life: 3000,
+    })
+  }
+}
+
+async function saveLoyaltySettings() {
+  savingLoyalty.value = true
+  try {
+    const response = await loyaltyService.updateLoyaltySettings(loyaltySettings.value)
+    if (response.success) {
+      // Update authStore loyalty settings
+      authStore.loyaltySettings = { ...loyaltySettings.value }
+      toast.add({
+        severity: 'success',
+        summary: 'Saved',
+        detail: 'Loyalty settings updated',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to save',
+      life: 3000,
+    })
+  } finally {
+    savingLoyalty.value = false
+  }
+}
+
 onBeforeUnmount(() => {
   document.documentElement.style.setProperty('--ps-primary', originalColor.value)
 })
@@ -761,7 +816,8 @@ onMounted(() => {
           <Tab value="1">Branding</Tab>
           <Tab value="2">Categories</Tab>
           <Tab value="3">Plugins</Tab>
-          <Tab value="4">Audit Log</Tab>
+          <Tab value="4">Loyalty</Tab>
+          <Tab value="5">Audit Log</Tab>
         </TabList>
 
         <TabPanels>
@@ -1058,7 +1114,114 @@ onMounted(() => {
           </TabPanel>
 
           <!-- ── Tab 5: Audit Log ── -->
+
           <TabPanel value="4">
+            <div class="tab-content" @vue:mounted="loadLoyaltySettingsTab">
+              <div class="settings-card">
+                <h3 class="card-title">Loyalty Program</h3>
+
+                <div class="loyalty-toggle-row">
+                  <div>
+                    <span class="loyalty-toggle-label">Enable Loyalty Program</span>
+                    <span class="loyalty-toggle-desc"
+                      >Customers earn and redeem points on purchases</span
+                    >
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: loyaltySettings.isEnabled }"
+                    @click="loyaltySettings.isEnabled = !loyaltySettings.isEnabled"
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <template v-if="loyaltySettings.isEnabled">
+                  <div class="loyalty-section-title">Earning Rules</div>
+                  <div class="field">
+                    <label>Points per {{ authStore.shop?.currency || 'LKR' }} 100 spent</label>
+                    <InputNumber
+                      v-model="loyaltySettings.pointsPer100"
+                      :min="1"
+                      :max="100"
+                      class="loyalty-input"
+                    />
+                  </div>
+
+                  <div class="loyalty-section-title">Redemption Rules</div>
+                  <div class="form-row">
+                    <div class="field">
+                      <label>Points needed to redeem</label>
+                      <InputNumber
+                        v-model="loyaltySettings.pointsToRedeem"
+                        :min="1"
+                        class="w-full"
+                      />
+                    </div>
+                    <div class="field">
+                      <label>Value per redemption ({{ authStore.shop?.currency || 'LKR' }})</label>
+                      <InputNumber v-model="loyaltySettings.redeemValue" :min="1" class="w-full" />
+                    </div>
+                  </div>
+
+                  <div class="loyalty-section-title">Tier Thresholds</div>
+                  <div class="form-row">
+                    <div class="field">
+                      <label>🥈 Silver from (total points earned)</label>
+                      <InputNumber
+                        v-model="loyaltySettings.silverThreshold"
+                        :min="1"
+                        class="w-full"
+                      />
+                    </div>
+                    <div class="field">
+                      <label>🥇 Gold from (total points earned)</label>
+                      <InputNumber
+                        v-model="loyaltySettings.goldThreshold"
+                        :min="1"
+                        class="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Live Preview -->
+                  <div class="loyalty-preview">
+                    <div class="loyalty-preview-title">Live Preview</div>
+                    <div class="loyalty-preview-row">
+                      <span>Customer spends {{ authStore.formatCurrency(5000) }}</span>
+                      <span class="preview-result"
+                        >→ Earns
+                        <strong>{{
+                          Math.floor((5000 / 100) * loyaltySettings.pointsPer100)
+                        }}</strong>
+                        points</span
+                      >
+                    </div>
+                    <div class="loyalty-preview-row">
+                      <span>Customer redeems {{ loyaltySettings.pointsToRedeem }} points</span>
+                      <span class="preview-result"
+                        >→ Gets
+                        <strong>{{ authStore.formatCurrency(loyaltySettings.redeemValue) }}</strong>
+                        discount</span
+                      >
+                    </div>
+                  </div>
+                </template>
+
+                <div class="card-footer">
+                  <Button
+                    label="Save Loyalty Settings"
+                    icon="pi pi-check"
+                    :loading="savingLoyalty"
+                    @click="saveLoyaltySettings"
+                  />
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+
+          <!-- ── Tab 6: Audit Log ── -->
+          <TabPanel value="5">
             <div class="tab-content" @vue:mounted="onAuditTabOpen">
               <!-- Summary Cards -->
               <div class="audit-summary-grid">
@@ -2154,5 +2317,105 @@ onMounted(() => {
 .audit-page-indicator {
   font-size: 0.8rem;
   color: #94a3b8;
+}
+
+/* ── Loyalty ── */
+.loyalty-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+}
+
+.loyalty-toggle-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.loyalty-toggle-desc {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.toggle-btn {
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+  background: #334155;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-btn.active {
+  background: #3b82f6;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+}
+
+.toggle-btn.active .toggle-knob {
+  transform: translateX(22px);
+}
+
+.loyalty-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: 0.25rem;
+  border-top: 1px solid #334155;
+}
+
+.loyalty-input {
+  width: 120px;
+}
+
+.loyalty-preview {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.loyalty-preview-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.loyalty-preview-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.preview-result {
+  color: #f1f5f9;
+}
+
+.preview-result strong {
+  color: #22c55e;
 }
 </style>

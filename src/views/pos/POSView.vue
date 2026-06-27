@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import productService from '../../services/productService'
 import posService from '../../services/posService'
 import pluginService from '../../services/pluginService'
+import loyaltyService from '../../services/loyaltyService'
 import type { CartItem, CreateTransactionRequest } from '../../types'
 import inventoryService from '../../services/inventoryService'
 import customerService from '../../services/customerService'
@@ -131,6 +132,12 @@ const newCustomer = ref<CreateCustomerRequest>({
   address: '',
 })
 
+// ── Loyalty State ──────────────────────────────────
+const customerLoyalty = ref<any>(null)
+const showRedeemConfirm = ref(false)
+const redeemedDiscount = ref(0)
+const redeemedPoints = ref(0)
+
 // ── Computed — Cart Totals ─────────────────────────
 const subtotal = computed(() =>
   cart.value.reduce((sum, item) => sum + item.price * item.quantity - item.discount, 0),
@@ -146,6 +153,12 @@ const taxAmount = computed(() =>
 const totalAmount = computed(() => subtotal.value + taxAmount.value - overallDiscount.value)
 
 const cartItemCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0))
+
+const pointsEarned = computed(() => {
+  const settings = authStore.loyaltySettings
+  if (!settings || !selectedCustomer.value) return 0
+  return Math.floor((totalAmount.value / 100) * settings.pointsPer100)
+})
 
 // ── Methods ───────────────────────────────────────
 async function searchProducts() {
@@ -384,6 +397,9 @@ function clearCart() {
   paymentMethod.value = 'cash'
   selectedCustomer.value = null
   customerQuery.value = ''
+  customerLoyalty.value = null
+  redeemedDiscount.value = 0
+  redeemedPoints.value = 0
 }
 
 async function processCheckout() {
@@ -437,6 +453,7 @@ async function processCheckout() {
   }
 }
 
+// ── Customer Methods ───────────────────────────────
 async function searchCustomers(event: any) {
   const query = event.query?.trim()
   if (!query) {
@@ -451,14 +468,30 @@ async function searchCustomers(event: any) {
   }
 }
 
-function onCustomerSelect(event: any) {
+async function onCustomerSelect(event: any) {
   selectedCustomer.value = event.value
   customerQuery.value = ''
+  customerLoyalty.value = null
+  redeemedDiscount.value = 0
+  redeemedPoints.value = 0
+
+  if (authStore.loyaltySettings?.isEnabled) {
+    try {
+      const response = await loyaltyService.getCustomerLoyalty(event.value.customerId)
+      if (response.success) customerLoyalty.value = response.data
+    } catch {
+      // silent fail
+    }
+  }
 }
 
 function clearCustomer() {
   selectedCustomer.value = null
   customerQuery.value = ''
+  customerLoyalty.value = null
+  redeemedDiscount.value = 0
+  redeemedPoints.value = 0
+  overallDiscount.value = 0
 }
 
 async function saveNewCustomer() {
@@ -494,6 +527,41 @@ async function saveNewCustomer() {
     })
   } finally {
     savingCustomer.value = false
+  }
+}
+
+// ── Loyalty Methods ────────────────────────────────
+function confirmRedeem() {
+  showRedeemConfirm.value = true
+}
+
+async function processRedemption() {
+  if (!selectedCustomer.value || !authStore.loyaltySettings) return
+  showRedeemConfirm.value = false
+  try {
+    const response = await loyaltyService.redeemPoints(
+      selectedCustomer.value.customerId,
+      authStore.loyaltySettings.pointsToRedeem,
+    )
+    if (response.success) {
+      redeemedDiscount.value += response.data.discountAmount
+      redeemedPoints.value += authStore.loyaltySettings.pointsToRedeem
+      overallDiscount.value += response.data.discountAmount
+      customerLoyalty.value.pointsBalance = response.data.newBalance
+      toast.add({
+        severity: 'success',
+        summary: 'Points Redeemed',
+        detail: `${authStore.loyaltySettings.pointsToRedeem} points → ${authStore.formatCurrency(response.data.discountAmount)} discount applied`,
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to redeem points',
+      life: 3000,
+    })
   }
 }
 
@@ -618,6 +686,26 @@ onMounted(() => {
               <span class="customer-phone" v-if="selectedCustomer.phone">
                 {{ selectedCustomer.phone }}
               </span>
+              <span
+                class="customer-loyalty"
+                v-if="customerLoyalty && authStore.loyaltySettings?.isEnabled"
+              >
+                {{
+                  customerLoyalty.loyaltyTier === 'gold'
+                    ? '🥇'
+                    : customerLoyalty.loyaltyTier === 'silver'
+                      ? '🥈'
+                      : '🥉'
+                }}
+                {{ customerLoyalty.pointsBalance }} pts ({{
+                  authStore.formatCurrency(
+                    Math.floor(
+                      customerLoyalty.pointsBalance / authStore.loyaltySettings.pointsToRedeem,
+                    ) * authStore.loyaltySettings.redeemValue,
+                  )
+                }}
+                value)
+              </span>
             </div>
           </div>
           <Button
@@ -629,7 +717,34 @@ onMounted(() => {
           />
         </div>
 
-        <div class="customer-search-row" v-else>
+        <!-- Redeem button -->
+        <div
+          class="redeem-row"
+          v-if="
+            selectedCustomer &&
+            customerLoyalty &&
+            authStore.loyaltySettings?.isEnabled &&
+            customerLoyalty.pointsBalance >= authStore.loyaltySettings.pointsToRedeem
+          "
+        >
+          <div v-if="redeemedPoints > 0" class="redeemed-info">
+            <i class="pi pi-check-circle" style="color: #22c55e" />
+            <span
+              >{{ redeemedPoints }} pts redeemed →
+              {{ authStore.formatCurrency(redeemedDiscount) }} off</span
+            >
+          </div>
+          <Button
+            :label="`Use ${authStore.loyaltySettings.pointsToRedeem} pts → ${authStore.formatCurrency(authStore.loyaltySettings.redeemValue)} off`"
+            icon="pi pi-star"
+            severity="warning"
+            size="small"
+            class="w-full"
+            @click="confirmRedeem"
+          />
+        </div>
+
+        <div class="customer-search-row" v-if="!selectedCustomer">
           <AutoComplete
             v-model="customerQuery"
             :suggestions="customerSuggestions"
@@ -848,6 +963,17 @@ onMounted(() => {
             <span>{{ lastTransaction.transaction.paymentMethod.toUpperCase() }}</span>
           </div>
         </div>
+
+        <!-- Points earned notice -->
+        <div
+          class="points-earned-notice"
+          v-if="authStore.loyaltySettings?.isEnabled && pointsEarned > 0"
+        >
+          <i class="pi pi-star-fill" />
+          <span
+            >Earned <strong>{{ pointsEarned }} points</strong> on this purchase!</span
+          >
+        </div>
       </div>
       <template #footer>
         <Button
@@ -927,7 +1053,6 @@ onMounted(() => {
           Base Price: {{ authStore.formatCurrency(parseFloat(variantProduct.price)) }}
         </div>
 
-        <!-- Size Selection -->
         <div class="variant-group">
           <label class="variant-group-label">SELECT SIZE</label>
           <div class="variant-options">
@@ -935,10 +1060,7 @@ onMounted(() => {
               v-for="size in availableSizes"
               :key="size"
               class="variant-option-btn"
-              :class="{
-                selected: selectedSize === size,
-                disabled: !isSizeAvailable(size),
-              }"
+              :class="{ selected: selectedSize === size, disabled: !isSizeAvailable(size) }"
               :disabled="!isSizeAvailable(size)"
               @click="onSizeSelect(size)"
             >
@@ -947,7 +1069,6 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Color Selection -->
         <div class="variant-group" v-if="selectedSize">
           <label class="variant-group-label">SELECT COLOR</label>
           <div class="variant-options">
@@ -955,10 +1076,7 @@ onMounted(() => {
               v-for="color in availableColors"
               :key="color"
               class="variant-option-btn color-btn"
-              :class="{
-                selected: selectedColor === color,
-                disabled: !isColorAvailable(color),
-              }"
+              :class="{ selected: selectedColor === color, disabled: !isColorAvailable(color) }"
               :disabled="!isColorAvailable(color)"
               @click="onColorSelect(color)"
             >
@@ -967,7 +1085,6 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Selected info -->
         <div class="variant-selected-info" v-if="selectedVariant">
           <div class="variant-info-row">
             <span>Selected:</span>
@@ -1014,6 +1131,42 @@ onMounted(() => {
           icon="pi pi-shopping-cart"
           :disabled="!selectedVariant"
           @click="addVariantToCart"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Redeem Confirmation Dialog -->
+    <Dialog
+      v-model:visible="showRedeemConfirm"
+      header="Confirm Redemption"
+      :style="{ width: '380px' }"
+      modal
+    >
+      <div style="padding: 1rem 0; text-align: center">
+        <i
+          class="pi pi-star"
+          style="font-size: 2.5rem; color: #f59e0b; display: block; margin-bottom: 0.75rem"
+        />
+        <p style="color: #475569; font-size: 0.875rem; margin: 0 0 0.5rem">
+          Redeem <strong>{{ authStore.loyaltySettings?.pointsToRedeem }} points</strong> for
+          <strong
+            >{{
+              authStore.formatCurrency(authStore.loyaltySettings?.redeemValue || 0)
+            }}
+            discount</strong
+          >?
+        </p>
+        <p style="color: #94a3b8; font-size: 0.8rem; margin: 0">
+          Once redeemed, points cannot be restored.
+        </p>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showRedeemConfirm = false" />
+        <Button
+          label="Confirm Redemption"
+          icon="pi pi-check"
+          severity="warning"
+          @click="processRedemption"
         />
       </template>
     </Dialog>
@@ -1116,17 +1269,14 @@ onMounted(() => {
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
 }
-
 .stock-low {
   background: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
 }
-
 .stock-service {
   background: rgba(139, 92, 246, 0.15);
   color: #8b5cf6;
 }
-
 .stock-out {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
@@ -1303,7 +1453,6 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
 }
-
 .discount-field {
   width: 110px;
 }
@@ -1345,7 +1494,6 @@ onMounted(() => {
   border-color: #3b82f6;
   color: #f1f5f9;
 }
-
 .payment-btn.active {
   background: #3b82f6;
   border-color: #3b82f6;
@@ -1369,7 +1517,6 @@ onMounted(() => {
   height: 48px;
   white-space: nowrap;
 }
-
 .checkout-btn {
   flex: 2;
   height: 48px;
@@ -1399,7 +1546,6 @@ onMounted(() => {
   margin: 0 0 0.25rem;
   color: #1e293b;
 }
-
 .txn-number {
   color: #475569;
   font-size: 0.875rem;
@@ -1441,6 +1587,25 @@ onMounted(() => {
   color: #1e293b;
   padding-top: 0.5rem;
   border-top: 1px solid #cbd5e1;
+}
+
+.points-earned-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #f59e0b;
+}
+
+.points-earned-notice .pi {
+  color: #f59e0b;
+}
+.points-earned-notice strong {
+  color: #f1f5f9;
 }
 
 .w-full {
@@ -1485,7 +1650,6 @@ onMounted(() => {
   width: 100%;
   font-size: 0.875rem;
 }
-
 :deep(.p-autocomplete-option) {
   padding: 0.5rem 0.75rem;
 }
@@ -1527,18 +1691,38 @@ onMounted(() => {
   color: #94a3b8;
 }
 
+.customer-loyalty {
+  display: block;
+  font-size: 0.75rem;
+  color: #f59e0b;
+  margin-top: 0.15rem;
+}
+
+.redeem-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+}
+
+.redeemed-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: #22c55e;
+}
+
 .customer-option {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
-
 .option-name {
   font-size: 0.875rem;
   font-weight: 500;
   color: #1e293b;
 }
-
 .option-phone {
   font-size: 0.75rem;
   color: #64748b;
@@ -1562,7 +1746,6 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.5rem;
 }
-
 .field label {
   font-size: 0.875rem;
   font-weight: 500;
@@ -1620,13 +1803,11 @@ onMounted(() => {
 .variant-option-btn:hover:not(.disabled) {
   border-color: #3b82f6;
 }
-
 .variant-option-btn.selected {
   border-color: #3b82f6;
   background: rgba(59, 130, 246, 0.15);
   color: #3b82f6;
 }
-
 .variant-option-btn.disabled {
   opacity: 0.35;
   cursor: not-allowed;
