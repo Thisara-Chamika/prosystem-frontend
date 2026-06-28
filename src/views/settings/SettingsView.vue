@@ -12,6 +12,7 @@ import loyaltyService from '../../services/loyaltyService'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -79,6 +80,17 @@ const savingConfig = ref(false)
 const newSize = ref('')
 const newColor = ref('')
 
+// Loyalty tab
+const loyaltySettings = ref<any>({
+  isEnabled: false,
+  pointsPer100: 1,
+  pointsToRedeem: 100,
+  redeemValue: 50,
+  silverThreshold: 501,
+  goldThreshold: 2001,
+})
+const savingLoyalty = ref(false)
+
 // Audit Log tab
 const auditSummary = ref<any>(null)
 const auditLogs = ref<any[]>([])
@@ -119,18 +131,6 @@ const actionOptions = [
   { label: '── Auth ──', value: '', disabled: true },
   { label: 'Login', value: 'LOGIN_SUCCESS' },
 ]
-
-// Loyalty tab
-const loyaltySettings = ref<any>({
-  isEnabled: false,
-  pointsPer100: 1,
-  pointsToRedeem: 100,
-  redeemValue: 50,
-  silverThreshold: 501,
-  goldThreshold: 2001,
-})
-const savingLoyalty = ref(false)
-const loyaltyTabOpened = ref(false)
 
 // ── Options ───────────────────────────────────────
 const currencyOptions = [
@@ -403,18 +403,6 @@ function confirmDeleteCategory(category: Category) {
   })
 }
 
-async function onDragEnd(event: any) {
-  const reordered = categories.value.map((cat, index) => ({
-    categoryId: cat.categoryId,
-    sortOrder: index + 1,
-  }))
-  try {
-    await categoryService.reorderCategories(reordered)
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save order', life: 3000 })
-  }
-}
-
 async function loadPlugins() {
   loadingPlugins.value = true
   try {
@@ -445,7 +433,6 @@ async function installPlugin() {
         detail: `${selectedPlugin.value.name} installed successfully!`,
         life: 3000,
       })
-      // Reload shop data so activePlugins updates and sidebar reacts
       const shopResponse = await shopService.getSettings()
       if (shopResponse.success && authStore.shop) {
         authStore.shop.activePlugins = shopResponse.data.activePlugins
@@ -567,6 +554,47 @@ async function saveConfig() {
   }
 }
 
+// ── Loyalty Methods ───────────────────────────────
+async function loadLoyaltySettings() {
+  try {
+    const response = await loyaltyService.getLoyaltySettings()
+    if (response.success) loyaltySettings.value = { ...response.data }
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load loyalty settings',
+      life: 3000,
+    })
+  }
+}
+
+async function saveLoyaltySettings() {
+  savingLoyalty.value = true
+  try {
+    const response = await loyaltyService.updateLoyaltySettings(loyaltySettings.value)
+    if (response.success) {
+      authStore.loyaltySettings = { ...loyaltySettings.value }
+      toast.add({
+        severity: 'success',
+        summary: 'Saved',
+        detail: 'Loyalty settings updated',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to save',
+      life: 3000,
+    })
+  } finally {
+    savingLoyalty.value = false
+  }
+}
+
+// ── Audit Methods ─────────────────────────────────
 function getDefaultDateRange() {
   const tz = authStore.shop?.timezone || 'UTC'
   const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
@@ -737,48 +765,6 @@ async function onAuditTabOpen() {
   await Promise.all([loadAuditSummary(), loadAuditLogs(1), loadStaffList()])
 }
 
-async function loadLoyaltySettingsTab() {
-  if (loyaltyTabOpened.value) return
-  loyaltyTabOpened.value = true
-  try {
-    const response = await loyaltyService.getLoyaltySettings()
-    if (response.success) loyaltySettings.value = response.data
-  } catch {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: 'Failed to load loyalty settings',
-      life: 3000,
-    })
-  }
-}
-
-async function saveLoyaltySettings() {
-  savingLoyalty.value = true
-  try {
-    const response = await loyaltyService.updateLoyaltySettings(loyaltySettings.value)
-    if (response.success) {
-      // Update authStore loyalty settings
-      authStore.loyaltySettings = { ...loyaltySettings.value }
-      toast.add({
-        severity: 'success',
-        summary: 'Saved',
-        detail: 'Loyalty settings updated',
-        life: 3000,
-      })
-    }
-  } catch (error: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.message || 'Failed to save',
-      life: 3000,
-    })
-  } finally {
-    savingLoyalty.value = false
-  }
-}
-
 onBeforeUnmount(() => {
   document.documentElement.style.setProperty('--ps-primary', originalColor.value)
 })
@@ -787,6 +773,7 @@ onMounted(() => {
   loadSettings()
   loadCategories()
   loadPlugins()
+  loadLoyaltySettings()
 })
 </script>
 
@@ -912,7 +899,6 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <!-- Live Preview -->
                 <div class="preview-section">
                   <label class="preview-label">Live Preview</label>
                   <div class="preview-topbar">
@@ -924,17 +910,12 @@ onMounted(() => {
                   </div>
                   <div class="preview-sidebar">
                     <div class="preview-nav-item active" :style="{ background: primaryColor }">
-                      <i class="pi pi-home" />
-                      <span>Dashboard</span>
+                      <i class="pi pi-home" /><span>Dashboard</span>
                     </div>
                     <div class="preview-nav-item">
-                      <i class="pi pi-shopping-cart" />
-                      <span>POS</span>
+                      <i class="pi pi-shopping-cart" /><span>POS</span>
                     </div>
-                    <div class="preview-nav-item">
-                      <i class="pi pi-box" />
-                      <span>Products</span>
-                    </div>
+                    <div class="preview-nav-item"><i class="pi pi-box" /><span>Products</span></div>
                   </div>
                   <p class="preview-note">Preview updates in real time</p>
                 </div>
@@ -1113,10 +1094,9 @@ onMounted(() => {
             </div>
           </TabPanel>
 
-          <!-- ── Tab 5: Audit Log ── -->
-
+          <!-- ── Tab 5: Loyalty ── -->
           <TabPanel value="4">
-            <div class="tab-content" @vue:mounted="loadLoyaltySettingsTab">
+            <div class="tab-content">
               <div class="settings-card">
                 <h3 class="card-title">Loyalty Program</h3>
 
@@ -1144,7 +1124,7 @@ onMounted(() => {
                       v-model="loyaltySettings.pointsPer100"
                       :min="1"
                       :max="100"
-                      class="loyalty-input"
+                      class="w-full"
                     />
                   </div>
 
@@ -1189,21 +1169,23 @@ onMounted(() => {
                     <div class="loyalty-preview-title">Live Preview</div>
                     <div class="loyalty-preview-row">
                       <span>Customer spends {{ authStore.formatCurrency(5000) }}</span>
-                      <span class="preview-result"
-                        >→ Earns
+                      <span class="preview-result">
+                        → Earns
                         <strong>{{
-                          Math.floor((5000 / 100) * loyaltySettings.pointsPer100)
+                          Math.floor((5000 / 100) * (loyaltySettings.pointsPer100 || 0))
                         }}</strong>
-                        points</span
-                      >
+                        points
+                      </span>
                     </div>
                     <div class="loyalty-preview-row">
                       <span>Customer redeems {{ loyaltySettings.pointsToRedeem }} points</span>
-                      <span class="preview-result"
-                        >→ Gets
-                        <strong>{{ authStore.formatCurrency(loyaltySettings.redeemValue) }}</strong>
-                        discount</span
-                      >
+                      <span class="preview-result">
+                        → Gets
+                        <strong>{{
+                          authStore.formatCurrency(loyaltySettings.redeemValue || 0)
+                        }}</strong>
+                        discount
+                      </span>
                     </div>
                   </div>
                 </template>
@@ -1234,9 +1216,9 @@ onMounted(() => {
                   <span class="audit-summary-label">Today's Actions</span>
                 </div>
                 <div class="audit-summary-card">
-                  <span class="audit-summary-value">
-                    {{ auditSummary?.mostActiveUser?.name ?? '—' }}
-                  </span>
+                  <span class="audit-summary-value">{{
+                    auditSummary?.mostActiveUser?.name ?? '—'
+                  }}</span>
                   <span class="audit-summary-label">Most Active User</span>
                 </div>
               </div>
@@ -1253,7 +1235,6 @@ onMounted(() => {
                   showClear
                   class="audit-filter-select"
                 />
-
                 <Select
                   v-model="auditUserFilter"
                   :options="staffList"
@@ -1263,11 +1244,9 @@ onMounted(() => {
                   showClear
                   class="audit-filter-select"
                 />
-
                 <input type="date" v-model="auditFromDate" class="audit-date-input" />
                 <span class="date-sep">to</span>
                 <input type="date" v-model="auditToDate" class="audit-date-input" />
-
                 <Button label="Apply" icon="pi pi-check" size="small" @click="applyAuditFilters" />
                 <Button
                   label="Clear"
@@ -1359,7 +1338,6 @@ onMounted(() => {
         </p>
         <p class="warning-note">Are you sure you want to continue?</p>
       </div>
-
       <template #footer>
         <Button label="Cancel" severity="secondary" @click="showCurrencyWarning = false" />
         <Button label="Yes, Change Currency" severity="warning" @click="saveGeneral" />
@@ -1430,6 +1408,7 @@ onMounted(() => {
         <Button label="OK" @click="showCategoryErrorDialog = false" />
       </template>
     </Dialog>
+
     <!-- Install Confirmation -->
     <Dialog
       v-model:visible="showInstallDialog"
@@ -1755,7 +1734,6 @@ onMounted(() => {
 .preview-nav-item.active {
   color: white;
 }
-
 .preview-note {
   font-size: 0.75rem;
   color: #475569;
@@ -1794,39 +1772,6 @@ onMounted(() => {
 
 .logo-placeholder i {
   font-size: 2rem;
-}
-
-.coming-soon {
-  text-align: center;
-  padding: 4rem 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.coming-soon-icon {
-  font-size: 3rem;
-  color: #334155;
-}
-
-.coming-soon h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #64748b;
-  margin: 0;
-}
-
-.coming-soon p {
-  color: #475569;
-  margin: 0;
-  font-size: 0.875rem;
-}
-
-.coming-soon-desc {
-  color: #334155 !important;
-  max-width: 300px;
-  line-height: 1.5;
 }
 
 .warning-dialog {
@@ -1880,7 +1825,6 @@ onMounted(() => {
 .empty-categories i {
   font-size: 2rem;
 }
-
 .empty-categories p {
   font-size: 0.875rem;
   margin: 0;
@@ -1907,14 +1851,12 @@ onMounted(() => {
   cursor: grab;
   font-size: 0.875rem;
 }
-
 .category-name {
   flex: 1;
   font-size: 0.875rem;
   font-weight: 500;
   color: #f1f5f9;
 }
-
 .category-actions {
   display: flex;
   gap: 0.25rem;
@@ -1925,18 +1867,6 @@ onMounted(() => {
   flex-direction: column;
   gap: 1rem;
   padding: 0.5rem 0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.field label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #cbd5e1;
 }
 
 /* ── Plugins ── */
@@ -1962,25 +1892,21 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
 }
-
 .plugin-icon {
   font-size: 2rem;
   flex-shrink: 0;
 }
-
 .plugin-info {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
 }
-
 .plugin-name {
   font-size: 1rem;
   font-weight: 600;
   color: #f1f5f9;
 }
-
 .plugin-version {
   font-size: 0.75rem;
   color: #64748b;
@@ -2008,13 +1934,11 @@ onMounted(() => {
   margin: 0;
   line-height: 1.5;
 }
-
 .plugin-features {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
-
 .plugin-feature {
   display: flex;
   align-items: center;
@@ -2022,12 +1946,10 @@ onMounted(() => {
   font-size: 0.8rem;
   color: #64748b;
 }
-
 .plugin-feature .pi {
   color: #22c55e;
   font-size: 0.75rem;
 }
-
 .plugin-actions {
   display: flex;
   gap: 0.5rem;
@@ -2056,20 +1978,17 @@ onMounted(() => {
   gap: 1.25rem;
   padding: 0.5rem 0;
 }
-
 .config-section {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
-
 .config-label {
   font-size: 0.875rem;
   font-weight: 600;
   color: #cbd5e1;
   margin: 0;
 }
-
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -2100,14 +2019,106 @@ onMounted(() => {
 .tag-remove:hover {
   color: #ef4444;
 }
-
 .tag-add-row {
   display: flex;
   gap: 0.5rem;
 }
-
 .tag-input {
   flex: 1;
+}
+
+/* ── Loyalty ── */
+.loyalty-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+}
+
+.loyalty-toggle-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.loyalty-toggle-desc {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.toggle-btn {
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+  background: #334155;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-btn.active {
+  background: #3b82f6;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+}
+
+.toggle-btn.active .toggle-knob {
+  transform: translateX(22px);
+}
+
+.loyalty-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: 0.25rem;
+  border-top: 1px solid #334155;
+}
+
+.loyalty-preview {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.loyalty-preview-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.loyalty-preview-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.preview-result {
+  color: #f1f5f9;
+}
+.preview-result strong {
+  color: #22c55e;
 }
 
 /* ── Audit Log ── */
@@ -2170,7 +2181,6 @@ onMounted(() => {
   outline: none;
   border-color: #3b82f6;
 }
-
 .date-sep {
   color: #64748b;
   font-size: 0.875rem;
@@ -2240,7 +2250,6 @@ onMounted(() => {
   color: #64748b;
   min-width: 100px;
 }
-
 .audit-user {
   font-size: 0.8rem;
   font-weight: 600;
@@ -2307,115 +2316,13 @@ onMounted(() => {
   font-size: 0.8rem;
   color: #64748b;
 }
-
 .audit-pagination-buttons {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
-
 .audit-page-indicator {
   font-size: 0.8rem;
   color: #94a3b8;
-}
-
-/* ── Loyalty ── */
-.loyalty-toggle-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 0;
-}
-
-.loyalty-toggle-label {
-  display: block;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #f1f5f9;
-}
-
-.loyalty-toggle-desc {
-  display: block;
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-top: 0.2rem;
-}
-
-.toggle-btn {
-  width: 48px;
-  height: 26px;
-  border-radius: 13px;
-  background: #334155;
-  border: none;
-  cursor: pointer;
-  position: relative;
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-.toggle-btn.active {
-  background: #3b82f6;
-}
-
-.toggle-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: white;
-  transition: transform 0.2s;
-}
-
-.toggle-btn.active .toggle-knob {
-  transform: translateX(22px);
-}
-
-.loyalty-section-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding-top: 0.25rem;
-  border-top: 1px solid #334155;
-}
-
-.loyalty-input {
-  width: 120px;
-}
-
-.loyalty-preview {
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.loyalty-preview-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.loyalty-preview-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.875rem;
-  color: #94a3b8;
-}
-
-.preview-result {
-  color: #f1f5f9;
-}
-
-.preview-result strong {
-  color: #22c55e;
 }
 </style>
