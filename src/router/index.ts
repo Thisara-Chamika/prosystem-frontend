@@ -85,6 +85,16 @@ const router = createRouter({
           name: 'reports',
           component: () => import('../views/reports/ReportsView.vue'),
         },
+        {
+          path: 'variants',
+          name: 'variants',
+          component: () => import('../views/variants/VariantManagerView.vue'),
+        },
+        {
+          path: 'customers/:customerId',
+          name: 'customer-profile',
+          component: () => import('../views/customers/profile/CustomerProfileView.vue'),
+        },
       ],
     },
 
@@ -110,6 +120,18 @@ router.beforeEach(async (to, _from) => {
 
   if (to.name === 'login' && authStore.isAuthenticated) {
     return { name: 'dashboard' }
+  }
+
+  // Plugin route guard
+  if (to.name === 'variants') {
+    const hasPlugin = authStore.shop?.activePlugins?.includes('fashion-shop') ?? false
+    if (!hasPlugin) {
+      return { name: 'dashboard' }
+    }
+    const role = authStore.userRole
+    if (role !== 'shop_owner' && role !== 'shop_manager') {
+      return { name: 'dashboard' }
+    }
   }
 })
 

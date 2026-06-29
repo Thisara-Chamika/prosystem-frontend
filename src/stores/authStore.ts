@@ -12,6 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   const shop = ref<any>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const loyaltySettings = ref<any>(null)
 
   // ─── GETTERS ──────────────────────────────────────────
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -63,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
         const shopResponse = await shopService.getShop()
         if (shopResponse.success) {
           shop.value = shopResponse.data
+          await loadLoyaltySettings()
         }
 
         router.push('/')
@@ -128,10 +130,21 @@ export const useAuthStore = defineStore('auth', () => {
         const shopResponse = await shopService.getShop()
         if (shopResponse.success) {
           shop.value = shopResponse.data
+          await loadLoyaltySettings()
         }
       }
     } catch {
       logout()
+    }
+  }
+
+  async function loadLoyaltySettings() {
+    try {
+      const { default: loyaltyService } = await import('../services/loyaltyService')
+      const response = await loyaltyService.getLoyaltySettings()
+      if (response.success) loyaltySettings.value = response.data
+    } catch {
+      // silent fail
     }
   }
 
@@ -164,5 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     fetchCurrentUser,
     logout,
+    loyaltySettings,
+    loadLoyaltySettings,
   }
 })
