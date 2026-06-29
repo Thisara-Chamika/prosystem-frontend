@@ -8,9 +8,11 @@ import type { Category } from '../../types'
 import pluginService from '../../services/pluginService'
 import auditLogService from '../../services/auditLogService'
 import staffService from '../../services/staffService'
+import loyaltyService from '../../services/loyaltyService'
 
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -77,6 +79,17 @@ const pluginConfig = ref<any>(null)
 const savingConfig = ref(false)
 const newSize = ref('')
 const newColor = ref('')
+
+// Loyalty tab
+const loyaltySettings = ref<any>({
+  isEnabled: false,
+  pointsPer100: 1,
+  pointsToRedeem: 100,
+  redeemValue: 50,
+  silverThreshold: 501,
+  goldThreshold: 2001,
+})
+const savingLoyalty = ref(false)
 
 // Audit Log tab
 const auditSummary = ref<any>(null)
@@ -390,18 +403,6 @@ function confirmDeleteCategory(category: Category) {
   })
 }
 
-async function onDragEnd(event: any) {
-  const reordered = categories.value.map((cat, index) => ({
-    categoryId: cat.categoryId,
-    sortOrder: index + 1,
-  }))
-  try {
-    await categoryService.reorderCategories(reordered)
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save order', life: 3000 })
-  }
-}
-
 async function loadPlugins() {
   loadingPlugins.value = true
   try {
@@ -432,7 +433,6 @@ async function installPlugin() {
         detail: `${selectedPlugin.value.name} installed successfully!`,
         life: 3000,
       })
-      // Reload shop data so activePlugins updates and sidebar reacts
       const shopResponse = await shopService.getSettings()
       if (shopResponse.success && authStore.shop) {
         authStore.shop.activePlugins = shopResponse.data.activePlugins
@@ -554,6 +554,47 @@ async function saveConfig() {
   }
 }
 
+// ── Loyalty Methods ───────────────────────────────
+async function loadLoyaltySettings() {
+  try {
+    const response = await loyaltyService.getLoyaltySettings()
+    if (response.success) loyaltySettings.value = { ...response.data }
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load loyalty settings',
+      life: 3000,
+    })
+  }
+}
+
+async function saveLoyaltySettings() {
+  savingLoyalty.value = true
+  try {
+    const response = await loyaltyService.updateLoyaltySettings(loyaltySettings.value)
+    if (response.success) {
+      authStore.loyaltySettings = { ...loyaltySettings.value }
+      toast.add({
+        severity: 'success',
+        summary: 'Saved',
+        detail: 'Loyalty settings updated',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to save',
+      life: 3000,
+    })
+  } finally {
+    savingLoyalty.value = false
+  }
+}
+
+// ── Audit Methods ─────────────────────────────────
 function getDefaultDateRange() {
   const tz = authStore.shop?.timezone || 'UTC'
   const today = new Date().toLocaleDateString('en-CA', { timeZone: tz })
@@ -732,6 +773,7 @@ onMounted(() => {
   loadSettings()
   loadCategories()
   loadPlugins()
+  loadLoyaltySettings()
 })
 </script>
 
@@ -761,7 +803,8 @@ onMounted(() => {
           <Tab value="1">Branding</Tab>
           <Tab value="2">Categories</Tab>
           <Tab value="3">Plugins</Tab>
-          <Tab value="4">Audit Log</Tab>
+          <Tab value="4">Loyalty</Tab>
+          <Tab value="5">Audit Log</Tab>
         </TabList>
 
         <TabPanels>
@@ -856,7 +899,6 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <!-- Live Preview -->
                 <div class="preview-section">
                   <label class="preview-label">Live Preview</label>
                   <div class="preview-topbar">
@@ -868,17 +910,12 @@ onMounted(() => {
                   </div>
                   <div class="preview-sidebar">
                     <div class="preview-nav-item active" :style="{ background: primaryColor }">
-                      <i class="pi pi-home" />
-                      <span>Dashboard</span>
+                      <i class="pi pi-home" /><span>Dashboard</span>
                     </div>
                     <div class="preview-nav-item">
-                      <i class="pi pi-shopping-cart" />
-                      <span>POS</span>
+                      <i class="pi pi-shopping-cart" /><span>POS</span>
                     </div>
-                    <div class="preview-nav-item">
-                      <i class="pi pi-box" />
-                      <span>Products</span>
-                    </div>
+                    <div class="preview-nav-item"><i class="pi pi-box" /><span>Products</span></div>
                   </div>
                   <p class="preview-note">Preview updates in real time</p>
                 </div>
@@ -1057,8 +1094,116 @@ onMounted(() => {
             </div>
           </TabPanel>
 
-          <!-- ── Tab 5: Audit Log ── -->
+          <!-- ── Tab 5: Loyalty ── -->
           <TabPanel value="4">
+            <div class="tab-content">
+              <div class="settings-card">
+                <h3 class="card-title">Loyalty Program</h3>
+
+                <div class="loyalty-toggle-row">
+                  <div>
+                    <span class="loyalty-toggle-label">Enable Loyalty Program</span>
+                    <span class="loyalty-toggle-desc"
+                      >Customers earn and redeem points on purchases</span
+                    >
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: loyaltySettings.isEnabled }"
+                    @click="loyaltySettings.isEnabled = !loyaltySettings.isEnabled"
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <template v-if="loyaltySettings.isEnabled">
+                  <div class="loyalty-section-title">Earning Rules</div>
+                  <div class="field">
+                    <label>Points per {{ authStore.shop?.currency || 'LKR' }} 100 spent</label>
+                    <InputNumber
+                      v-model="loyaltySettings.pointsPer100"
+                      :min="1"
+                      :max="100"
+                      class="w-full"
+                    />
+                  </div>
+
+                  <div class="loyalty-section-title">Redemption Rules</div>
+                  <div class="form-row">
+                    <div class="field">
+                      <label>Points needed to redeem</label>
+                      <InputNumber
+                        v-model="loyaltySettings.pointsToRedeem"
+                        :min="1"
+                        class="w-full"
+                      />
+                    </div>
+                    <div class="field">
+                      <label>Value per redemption ({{ authStore.shop?.currency || 'LKR' }})</label>
+                      <InputNumber v-model="loyaltySettings.redeemValue" :min="1" class="w-full" />
+                    </div>
+                  </div>
+
+                  <div class="loyalty-section-title">Tier Thresholds</div>
+                  <div class="form-row">
+                    <div class="field">
+                      <label>🥈 Silver from (total points earned)</label>
+                      <InputNumber
+                        v-model="loyaltySettings.silverThreshold"
+                        :min="1"
+                        class="w-full"
+                      />
+                    </div>
+                    <div class="field">
+                      <label>🥇 Gold from (total points earned)</label>
+                      <InputNumber
+                        v-model="loyaltySettings.goldThreshold"
+                        :min="1"
+                        class="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Live Preview -->
+                  <div class="loyalty-preview">
+                    <div class="loyalty-preview-title">Live Preview</div>
+                    <div class="loyalty-preview-row">
+                      <span>Customer spends {{ authStore.formatCurrency(5000) }}</span>
+                      <span class="preview-result">
+                        → Earns
+                        <strong>{{
+                          Math.floor((5000 / 100) * (loyaltySettings.pointsPer100 || 0))
+                        }}</strong>
+                        points
+                      </span>
+                    </div>
+                    <div class="loyalty-preview-row">
+                      <span>Customer redeems {{ loyaltySettings.pointsToRedeem }} points</span>
+                      <span class="preview-result">
+                        → Gets
+                        <strong>{{
+                          authStore.formatCurrency(loyaltySettings.redeemValue || 0)
+                        }}</strong>
+                        discount
+                      </span>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="card-footer">
+                  <Button
+                    label="Save Loyalty Settings"
+                    icon="pi pi-check"
+                    :loading="savingLoyalty"
+                    @click="saveLoyaltySettings"
+                  />
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+
+          <!-- ── Tab 6: Audit Log ── -->
+          <TabPanel value="5">
             <div class="tab-content" @vue:mounted="onAuditTabOpen">
               <!-- Summary Cards -->
               <div class="audit-summary-grid">
@@ -1071,9 +1216,9 @@ onMounted(() => {
                   <span class="audit-summary-label">Today's Actions</span>
                 </div>
                 <div class="audit-summary-card">
-                  <span class="audit-summary-value">
-                    {{ auditSummary?.mostActiveUser?.name ?? '—' }}
-                  </span>
+                  <span class="audit-summary-value">{{
+                    auditSummary?.mostActiveUser?.name ?? '—'
+                  }}</span>
                   <span class="audit-summary-label">Most Active User</span>
                 </div>
               </div>
@@ -1090,7 +1235,6 @@ onMounted(() => {
                   showClear
                   class="audit-filter-select"
                 />
-
                 <Select
                   v-model="auditUserFilter"
                   :options="staffList"
@@ -1100,11 +1244,9 @@ onMounted(() => {
                   showClear
                   class="audit-filter-select"
                 />
-
                 <input type="date" v-model="auditFromDate" class="audit-date-input" />
                 <span class="date-sep">to</span>
                 <input type="date" v-model="auditToDate" class="audit-date-input" />
-
                 <Button label="Apply" icon="pi pi-check" size="small" @click="applyAuditFilters" />
                 <Button
                   label="Clear"
@@ -1196,7 +1338,6 @@ onMounted(() => {
         </p>
         <p class="warning-note">Are you sure you want to continue?</p>
       </div>
-
       <template #footer>
         <Button label="Cancel" severity="secondary" @click="showCurrencyWarning = false" />
         <Button label="Yes, Change Currency" severity="warning" @click="saveGeneral" />
@@ -1267,6 +1408,7 @@ onMounted(() => {
         <Button label="OK" @click="showCategoryErrorDialog = false" />
       </template>
     </Dialog>
+
     <!-- Install Confirmation -->
     <Dialog
       v-model:visible="showInstallDialog"
@@ -1592,7 +1734,6 @@ onMounted(() => {
 .preview-nav-item.active {
   color: white;
 }
-
 .preview-note {
   font-size: 0.75rem;
   color: #475569;
@@ -1631,39 +1772,6 @@ onMounted(() => {
 
 .logo-placeholder i {
   font-size: 2rem;
-}
-
-.coming-soon {
-  text-align: center;
-  padding: 4rem 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.coming-soon-icon {
-  font-size: 3rem;
-  color: #334155;
-}
-
-.coming-soon h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #64748b;
-  margin: 0;
-}
-
-.coming-soon p {
-  color: #475569;
-  margin: 0;
-  font-size: 0.875rem;
-}
-
-.coming-soon-desc {
-  color: #334155 !important;
-  max-width: 300px;
-  line-height: 1.5;
 }
 
 .warning-dialog {
@@ -1717,7 +1825,6 @@ onMounted(() => {
 .empty-categories i {
   font-size: 2rem;
 }
-
 .empty-categories p {
   font-size: 0.875rem;
   margin: 0;
@@ -1744,14 +1851,12 @@ onMounted(() => {
   cursor: grab;
   font-size: 0.875rem;
 }
-
 .category-name {
   flex: 1;
   font-size: 0.875rem;
   font-weight: 500;
   color: #f1f5f9;
 }
-
 .category-actions {
   display: flex;
   gap: 0.25rem;
@@ -1762,18 +1867,6 @@ onMounted(() => {
   flex-direction: column;
   gap: 1rem;
   padding: 0.5rem 0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.field label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #cbd5e1;
 }
 
 /* ── Plugins ── */
@@ -1799,25 +1892,21 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
 }
-
 .plugin-icon {
   font-size: 2rem;
   flex-shrink: 0;
 }
-
 .plugin-info {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
 }
-
 .plugin-name {
   font-size: 1rem;
   font-weight: 600;
   color: #f1f5f9;
 }
-
 .plugin-version {
   font-size: 0.75rem;
   color: #64748b;
@@ -1845,13 +1934,11 @@ onMounted(() => {
   margin: 0;
   line-height: 1.5;
 }
-
 .plugin-features {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
-
 .plugin-feature {
   display: flex;
   align-items: center;
@@ -1859,12 +1946,10 @@ onMounted(() => {
   font-size: 0.8rem;
   color: #64748b;
 }
-
 .plugin-feature .pi {
   color: #22c55e;
   font-size: 0.75rem;
 }
-
 .plugin-actions {
   display: flex;
   gap: 0.5rem;
@@ -1893,20 +1978,17 @@ onMounted(() => {
   gap: 1.25rem;
   padding: 0.5rem 0;
 }
-
 .config-section {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
-
 .config-label {
   font-size: 0.875rem;
   font-weight: 600;
   color: #cbd5e1;
   margin: 0;
 }
-
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -1937,14 +2019,106 @@ onMounted(() => {
 .tag-remove:hover {
   color: #ef4444;
 }
-
 .tag-add-row {
   display: flex;
   gap: 0.5rem;
 }
-
 .tag-input {
   flex: 1;
+}
+
+/* ── Loyalty ── */
+.loyalty-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+}
+
+.loyalty-toggle-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.loyalty-toggle-desc {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.toggle-btn {
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+  background: #334155;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-btn.active {
+  background: #3b82f6;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+}
+
+.toggle-btn.active .toggle-knob {
+  transform: translateX(22px);
+}
+
+.loyalty-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: 0.25rem;
+  border-top: 1px solid #334155;
+}
+
+.loyalty-preview {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.loyalty-preview-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.loyalty-preview-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.preview-result {
+  color: #f1f5f9;
+}
+.preview-result strong {
+  color: #22c55e;
 }
 
 /* ── Audit Log ── */
@@ -2007,7 +2181,6 @@ onMounted(() => {
   outline: none;
   border-color: #3b82f6;
 }
-
 .date-sep {
   color: #64748b;
   font-size: 0.875rem;
@@ -2077,7 +2250,6 @@ onMounted(() => {
   color: #64748b;
   min-width: 100px;
 }
-
 .audit-user {
   font-size: 0.8rem;
   font-weight: 600;
@@ -2144,13 +2316,11 @@ onMounted(() => {
   font-size: 0.8rem;
   color: #64748b;
 }
-
 .audit-pagination-buttons {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
-
 .audit-page-indicator {
   font-size: 0.8rem;
   color: #94a3b8;

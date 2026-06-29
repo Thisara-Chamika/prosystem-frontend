@@ -90,6 +90,11 @@ const router = createRouter({
           name: 'variants',
           component: () => import('../views/variants/VariantManagerView.vue'),
         },
+        {
+          path: 'customers/:customerId',
+          name: 'customer-profile',
+          component: () => import('../views/customers/profile/CustomerProfileView.vue'),
+        },
       ],
     },
 

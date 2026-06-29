@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import customerService from '../../services/customerService'
 import type { Customer } from '../../types'
 import { useAuthStore } from '../../stores/authStore'
+import { useRouter } from 'vue-router'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -17,6 +18,7 @@ import Toast from 'primevue/toast'
 
 const toast = useToast()
 const authStore = useAuthStore()
+const router = useRouter()
 
 // ── State ─────────────────────────────────────────
 const customers = ref<Customer[]>([])
@@ -362,6 +364,13 @@ onMounted(() => {
                 size="small"
                 severity="secondary"
                 @click="openEditDialog(data)"
+              />
+              <Button
+                icon="pi pi-user"
+                size="small"
+                severity="info"
+                v-tooltip="'View Profile'"
+                @click="router.push(`/customers/${data.customerId}`)"
               />
             </div>
           </template>
