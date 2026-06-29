@@ -415,11 +415,12 @@ async function processCheckout() {
 
   processingCheckout.value = true
   try {
-    const request: CreateTransactionRequest = {
+    const request: any = {
       customerId: selectedCustomer.value?.customerId ?? null,
       paymentMethod: paymentMethod.value,
       discount: overallDiscount.value,
       notes: notes.value || undefined,
+      ...(redeemedPoints.value > 0 ? { pointsToRedeem: redeemedPoints.value } : {}),
       items: cart.value.map((item: any) => ({
         productId: item.productId,
         ...(item.variantId ? { variantId: item.variantId } : {}),
@@ -535,34 +536,19 @@ function confirmRedeem() {
   showRedeemConfirm.value = true
 }
 
-async function processRedemption() {
-  if (!selectedCustomer.value || !authStore.loyaltySettings) return
+function applyRedemption() {
+  if (!authStore.loyaltySettings) return
   showRedeemConfirm.value = false
-  try {
-    const response = await loyaltyService.redeemPoints(
-      selectedCustomer.value.customerId,
-      authStore.loyaltySettings.pointsToRedeem,
-    )
-    if (response.success) {
-      redeemedDiscount.value += response.data.discountAmount
-      redeemedPoints.value += authStore.loyaltySettings.pointsToRedeem
-      overallDiscount.value += response.data.discountAmount
-      customerLoyalty.value.pointsBalance = response.data.newBalance
-      toast.add({
-        severity: 'success',
-        summary: 'Points Redeemed',
-        detail: `${authStore.loyaltySettings.pointsToRedeem} points → ${authStore.formatCurrency(response.data.discountAmount)} discount applied`,
-        life: 3000,
-      })
-    }
-  } catch (error: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.message || 'Failed to redeem points',
-      life: 3000,
-    })
-  }
+  redeemedPoints.value += authStore.loyaltySettings.pointsToRedeem
+  redeemedDiscount.value += authStore.loyaltySettings.redeemValue
+  overallDiscount.value += authStore.loyaltySettings.redeemValue
+  customerLoyalty.value.pointsBalance -= authStore.loyaltySettings.pointsToRedeem
+  toast.add({
+    severity: 'success',
+    summary: 'Points Applied',
+    detail: `${authStore.loyaltySettings.pointsToRedeem} points → ${authStore.formatCurrency(authStore.loyaltySettings.redeemValue)} discount will be applied at checkout`,
+    life: 3000,
+  })
 }
 
 function handlePayment() {
@@ -1157,7 +1143,7 @@ onMounted(() => {
           >?
         </p>
         <p style="color: #94a3b8; font-size: 0.8rem; margin: 0">
-          Once redeemed, points cannot be restored.
+          Points will be deducted when you complete the transaction.
         </p>
       </div>
       <template #footer>
@@ -1166,7 +1152,7 @@ onMounted(() => {
           label="Confirm Redemption"
           icon="pi pi-check"
           severity="warning"
-          @click="processRedemption"
+          @click="applyRedemption"
         />
       </template>
     </Dialog>
