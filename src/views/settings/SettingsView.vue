@@ -91,6 +91,16 @@ const loyaltySettings = ref<any>({
 })
 const savingLoyalty = ref(false)
 
+// Notifications tab
+const emailPreferences = ref<any>({
+  receiptEmails: true,
+  customerWelcomeEmails: true,
+  staffWelcomeEmail: true,
+  lowStockAlerts: true,
+})
+const savingNotifications = ref(false)
+const welcomeEmailSent = ref(false)
+
 // Audit Log tab
 const auditSummary = ref<any>(null)
 const auditLogs = ref<any[]>([])
@@ -594,6 +604,53 @@ async function saveLoyaltySettings() {
   }
 }
 
+async function loadEmailPreferences() {
+  try {
+    const response = await shopService.getEmailPreferences()
+    if (response.success) {
+      emailPreferences.value = {
+        receiptEmails: response.data.receiptEmails,
+        customerWelcomeEmails: response.data.customerWelcomeEmails,
+        staffWelcomeEmail: response.data.staffWelcomeEmail,
+        lowStockAlerts: response.data.lowStockAlerts,
+      }
+    }
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load email preferences',
+      life: 3000,
+    })
+  }
+  // welcomeEmailSent comes from the shop object, not preferences
+  welcomeEmailSent.value = authStore.shop?.welcomeEmailSent ?? false
+}
+
+async function saveEmailPreferences() {
+  savingNotifications.value = true
+  try {
+    const response = await shopService.updateEmailPreferences(emailPreferences.value)
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Saved',
+        detail: 'Email preferences updated',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to save',
+      life: 3000,
+    })
+  } finally {
+    savingNotifications.value = false
+  }
+}
+
 // ── Audit Methods ─────────────────────────────────
 function getDefaultDateRange() {
   const tz = authStore.shop?.timezone || 'UTC'
@@ -774,6 +831,7 @@ onMounted(() => {
   loadCategories()
   loadPlugins()
   loadLoyaltySettings()
+  loadEmailPreferences()
 })
 </script>
 
@@ -804,7 +862,8 @@ onMounted(() => {
           <Tab value="2">Categories</Tab>
           <Tab value="3">Plugins</Tab>
           <Tab value="4">Loyalty</Tab>
-          <Tab value="5">Audit Log</Tab>
+          <Tab value="5">Notifications</Tab>
+          <Tab value="6">Audit Log</Tab>
         </TabList>
 
         <TabPanels>
@@ -1202,8 +1261,126 @@ onMounted(() => {
             </div>
           </TabPanel>
 
-          <!-- ── Tab 6: Audit Log ── -->
+          <!-- ── Tab 6: Email Notifications ── -->
+
           <TabPanel value="5">
+            <div class="tab-content">
+              <p class="card-desc" style="padding: 0 0.25rem">
+                Manage automated email notifications sent by ProSystem.
+              </p>
+
+              <!-- Customer Emails -->
+              <div class="settings-card">
+                <h3 class="card-title">Customer Emails</h3>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">📧</span>
+                    <span class="notif-label">Receipt Emails</span>
+                    <span class="notif-desc"
+                      >Send receipt to customer after purchase (only if customer has email on
+                      file)</span
+                    >
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.receiptEmails }"
+                    @click="emailPreferences.receiptEmails = !emailPreferences.receiptEmails"
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">👋</span>
+                    <span class="notif-label">Customer Welcome Emails</span>
+                    <span class="notif-desc">Welcome new customers when they're added</span>
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.customerWelcomeEmails }"
+                    @click="
+                      emailPreferences.customerWelcomeEmails =
+                        !emailPreferences.customerWelcomeEmails
+                    "
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Team Emails -->
+              <div class="settings-card">
+                <h3 class="card-title">Team Emails</h3>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">👨‍💼</span>
+                    <span class="notif-label">Staff Welcome Emails</span>
+                    <span class="notif-desc">Notify new staff members when added</span>
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.staffWelcomeEmail }"
+                    @click="
+                      emailPreferences.staffWelcomeEmail = !emailPreferences.staffWelcomeEmail
+                    "
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">🎉</span>
+                    <span class="notif-label">Shop Welcome Email</span>
+                    <span class="notif-desc">Sent once after onboarding completes</span>
+                  </div>
+                  <span
+                    class="status-pill"
+                    :class="welcomeEmailSent ? 'status-sent' : 'status-pending'"
+                  >
+                    {{ welcomeEmailSent ? '✅ Sent' : 'Pending' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Operational Alerts -->
+              <div class="settings-card">
+                <h3 class="card-title">Operational Alerts</h3>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">⚠️</span>
+                    <span class="notif-label">Low Stock Alerts</span>
+                    <span class="notif-desc"
+                      >Sent to shop owner and managers daily when products run low</span
+                    >
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.lowStockAlerts }"
+                    @click="emailPreferences.lowStockAlerts = !emailPreferences.lowStockAlerts"
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <div class="card-footer">
+                  <Button
+                    label="Save Preferences"
+                    icon="pi pi-check"
+                    :loading="savingNotifications"
+                    @click="saveEmailPreferences"
+                  />
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+
+          <!-- ── Tab 7: Audit Log ── -->
+          <TabPanel value="6">
             <div class="tab-content" @vue:mounted="onAuditTabOpen">
               <!-- Summary Cards -->
               <div class="audit-summary-grid">
@@ -2324,5 +2501,54 @@ onMounted(() => {
 .audit-page-indicator {
   font-size: 0.8rem;
   color: #94a3b8;
+}
+
+/* ── Notifications ── */
+.notif-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #334155;
+}
+
+.notif-row:last-of-type {
+  border-bottom: none;
+}
+
+.notif-icon {
+  margin-right: 0.5rem;
+}
+
+.notif-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: block;
+}
+
+.notif-desc {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.status-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.status-sent {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.status-pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
 }
 </style>

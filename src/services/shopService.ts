@@ -61,6 +61,23 @@ const shopService = {
     const response = await api.put('/api/shops/settings', data)
     return response.data
   },
+
+  // GET /api/shops/email-preferences
+  async getEmailPreferences(): Promise<any> {
+    const response = await api.get('/api/shops/email-preferences')
+    return response.data
+  },
+
+  // PUT /api/shops/email-preferences
+  async updateEmailPreferences(data: {
+    receiptEmails?: boolean
+    customerWelcomeEmails?: boolean
+    staffWelcomeEmail?: boolean
+    lowStockAlerts?: boolean
+  }): Promise<any> {
+    const response = await api.put('/api/shops/email-preferences', data)
+    return response.data
+  },
 }
 
 export default shopService
