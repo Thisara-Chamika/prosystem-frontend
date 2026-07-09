@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import shopService from '../../services/shopService'
 import { useAuthStore } from '../../stores/authStore'
@@ -79,6 +79,9 @@ const pluginConfig = ref<any>(null)
 const savingConfig = ref(false)
 const newSize = ref('')
 const newColor = ref('')
+
+const activePluginsList = computed(() => plugins.value.filter((p: any) => p.isInstalled))
+const availablePluginsList = computed(() => plugins.value.filter((p: any) => !p.isInstalled))
 
 // Loyalty tab
 const loyaltySettings = ref<any>({
@@ -1091,65 +1094,116 @@ onMounted(() => {
                 <p>Loading plugins...</p>
               </div>
 
-              <div class="plugin-list" v-else>
-                <div v-for="plugin in plugins" :key="plugin.id" class="plugin-card">
-                  <div class="plugin-header">
-                    <div class="plugin-icon">{{ plugin.icon }}</div>
-                    <div class="plugin-info">
-                      <span class="plugin-name">{{ plugin.name }}</span>
-                      <span class="plugin-version">v{{ plugin.version }}</span>
-                    </div>
-                    <div class="plugin-status">
-                      <span v-if="plugin.isInstalled" class="status-badge installed">
-                        <i class="pi pi-check-circle" /> Installed
-                      </span>
+              <template v-else>
+                <!-- Active Plugins Section -->
+                <div class="plugin-section">
+                  <h3 class="plugin-section-title">Active Plugins</h3>
+                  <p class="plugin-section-desc">Currently installed and running</p>
+
+                  <div class="plugin-list" v-if="activePluginsList.length > 0">
+                    <div v-for="plugin in activePluginsList" :key="plugin.id" class="plugin-card">
+                      <div class="plugin-header">
+                        <div class="plugin-icon">{{ plugin.icon }}</div>
+                        <div class="plugin-info">
+                          <span class="plugin-name">{{ plugin.name }}</span>
+                          <span class="plugin-version">v{{ plugin.version }}</span>
+                        </div>
+                        <div class="plugin-status">
+                          <span class="status-badge installed">
+                            <i class="pi pi-check-circle" /> Active
+                          </span>
+                        </div>
+                      </div>
+
+                      <p class="plugin-desc">{{ plugin.description }}</p>
+
+                      <div class="plugin-features">
+                        <div
+                          v-for="feature in plugin.features"
+                          :key="feature"
+                          class="plugin-feature"
+                        >
+                          <i class="pi pi-check" />
+                          <span>{{ feature }}</span>
+                        </div>
+                      </div>
+
+                      <div class="plugin-actions">
+                        <Button
+                          label="Configure"
+                          icon="pi pi-cog"
+                          severity="secondary"
+                          size="small"
+                          @click="openConfigure(plugin)"
+                        />
+                        <Button
+                          label="Uninstall"
+                          icon="pi pi-trash"
+                          severity="danger"
+                          size="small"
+                          :loading="uninstallingPlugin === plugin.id"
+                          @click="confirmUninstall(plugin)"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <p class="plugin-desc">{{ plugin.description }}</p>
-
-                  <div class="plugin-features">
-                    <div v-for="feature in plugin.features" :key="feature" class="plugin-feature">
-                      <i class="pi pi-check" />
-                      <span>{{ feature }}</span>
-                    </div>
-                  </div>
-
-                  <div class="plugin-actions">
-                    <template v-if="plugin.isInstalled">
-                      <Button
-                        label="Configure"
-                        icon="pi pi-cog"
-                        severity="secondary"
-                        size="small"
-                        @click="openConfigure(plugin)"
-                      />
-                      <Button
-                        label="Uninstall"
-                        icon="pi pi-trash"
-                        severity="danger"
-                        size="small"
-                        :loading="uninstallingPlugin === plugin.id"
-                        @click="confirmUninstall(plugin)"
-                      />
-                    </template>
-                    <template v-else>
-                      <Button
-                        label="Install"
-                        icon="pi pi-download"
-                        size="small"
-                        :loading="installingPlugin === plugin.id"
-                        @click="confirmInstall(plugin)"
-                      />
-                    </template>
+                  <div v-else class="empty-plugins">
+                    <i class="pi pi-puzzle" />
+                    <p>No active plugins yet</p>
                   </div>
                 </div>
 
-                <div v-if="plugins.length === 0" class="empty-plugins">
-                  <i class="pi pi-puzzle" />
-                  <p>No plugins available</p>
+                <!-- Available Plugins Section -->
+                <div class="plugin-section">
+                  <h3 class="plugin-section-title">Available Plugins</h3>
+                  <p class="plugin-section-desc">Compatible with your shop type</p>
+
+                  <div class="plugin-list" v-if="availablePluginsList.length > 0">
+                    <div
+                      v-for="plugin in availablePluginsList"
+                      :key="plugin.id"
+                      class="plugin-card"
+                    >
+                      <div class="plugin-header">
+                        <div class="plugin-icon">{{ plugin.icon }}</div>
+                        <div class="plugin-info">
+                          <span class="plugin-name">{{ plugin.name }}</span>
+                          <span class="plugin-version">v{{ plugin.version }}</span>
+                        </div>
+                      </div>
+
+                      <p class="plugin-desc">{{ plugin.description }}</p>
+
+                      <div class="plugin-features">
+                        <div
+                          v-for="feature in plugin.features"
+                          :key="feature"
+                          class="plugin-feature"
+                        >
+                          <i class="pi pi-check" />
+                          <span>{{ feature }}</span>
+                        </div>
+                      </div>
+
+                      <div class="plugin-actions">
+                        <Button
+                          label="Install"
+                          icon="pi pi-download"
+                          size="small"
+                          :loading="installingPlugin === plugin.id"
+                          @click="confirmInstall(plugin)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else class="empty-plugins">
+                    <i class="pi pi-check-circle" />
+                    <p>All compatible plugins are already active</p>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
           </TabPanel>
 
@@ -2087,6 +2141,32 @@ onMounted(() => {
 .plugin-version {
   font-size: 0.75rem;
   color: #64748b;
+}
+
+.plugin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plugin-section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #465974;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #334155;
+}
+
+.plugin-section:first-child .plugin-section-title {
+  border-top: none;
+  padding-top: 0;
+}
+
+.plugin-section-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: -0.5rem 0 0;
 }
 
 .status-badge {
