@@ -2,11 +2,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import shopService from '../../services/shopService'
+import pluginService from '../../services/pluginService'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 
 import BusinessTypeStep from './steps/BusinessTypeStep.vue'
-import PluginsStep from './steps/PluginsStep.vue'
+import AutoInstallPluginsStep from './steps/AutoInstallPluginsStep.vue'
 import ConfigureStep from './steps/ConfigureStep.vue'
 import { useAuthStore } from '../../stores/authStore'
 import CategoriesPreviewStep from './steps/CategoriesPreviewStep.vue'
@@ -23,9 +24,8 @@ const showCategoriesPreview = ref(false)
 // Step 1 state
 const selectedBusinessType = ref('')
 
-// Step 2 state
-const availablePlugins = ref<any[]>([])
-const activePlugins = ref<string[]>([])
+// Step 2 state — enriched auto-installed plugin details
+const autoInstalledPlugins = ref<any[]>([])
 
 // Step 3 state
 const configuration = ref({
@@ -48,13 +48,22 @@ async function onBusinessTypeSelected(type: string) {
     const response = await shopService.setBusinessType(type)
     if (response.success) {
       selectedBusinessType.value = type
-      // Load plugins in background while showing preview
-      const pluginsResponse = await shopService.getAvailablePlugins()
-      if (pluginsResponse.success) {
-        availablePlugins.value = pluginsResponse.data.availablePlugins
-        activePlugins.value = pluginsResponse.data.activePlugins
+      const autoInstalledIds: string[] = response.data.autoInstalledPlugins || []
+
+      if (autoInstalledIds.length > 0) {
+        const pluginsResponse = await pluginService.getPlugins()
+        if (pluginsResponse.success) {
+          autoInstalledPlugins.value = pluginsResponse.data.filter((p: any) =>
+            autoInstalledIds.includes(p.id),
+          )
+        }
+      } else {
+        autoInstalledPlugins.value = []
       }
-      // Show categories preview before moving to plugins step
+
+      // Refresh authStore so shop.businessType / activePlugins are current
+      await authStore.fetchCurrentUser()
+
       showCategoriesPreview.value = true
     }
   } catch (error: any) {
@@ -69,40 +78,20 @@ async function onBusinessTypeSelected(type: string) {
   }
 }
 
-// ── Step 2 handlers ───────────────────────────────
-async function onPluginToggled(pluginId: string, active: boolean) {
-  try {
-    const action = active ? 'add' : 'remove'
-    await shopService.togglePlugin(pluginId, action)
-    if (active) {
-      activePlugins.value = [...activePlugins.value, pluginId]
-    } else {
-      activePlugins.value = activePlugins.value.filter((p) => p !== pluginId)
-    }
-  } catch (error: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: 'Failed to update plugin',
-      life: 3000,
-    })
-  }
-}
-
-function onPluginsNext() {
-  currentStep.value = 3
-}
-
 function onCategoriesPreviewNext() {
   showCategoriesPreview.value = false
-  currentStep.value = 2
+  // Skip the auto-install confirmation entirely if nothing was auto-installed
+  currentStep.value = autoInstalledPlugins.value.length === 0 ? 3 : 2
+}
+
+function onAutoInstallNext() {
+  currentStep.value = 3
 }
 
 // ── Step 3 handlers ───────────────────────────────
 async function onFinishSetup(config: typeof configuration.value) {
   loading.value = true
   try {
-    // Save configuration
     await shopService.updateConfiguration({
       primaryColor: config.primaryColor,
       currency: config.currency,
@@ -110,7 +99,6 @@ async function onFinishSetup(config: typeof configuration.value) {
       logoUrl: config.logoUrl || undefined,
     })
 
-    // Complete onboarding
     await shopService.completeOnboarding()
     await authStore.fetchCurrentUser()
 
@@ -173,7 +161,6 @@ function goBack() {
         <span class="step-label" :class="{ active: currentStep === step.number }">
           {{ step.label }}
         </span>
-        <!-- Connector line -->
         <div
           v-if="step.number < steps.length"
           class="step-connector"
@@ -198,15 +185,13 @@ function goBack() {
         @next="onCategoriesPreviewNext"
       />
 
-      <!-- Step 2: Plugins -->
-      <PluginsStep
+      <!-- Step 2: Auto-Installed Plugins Confirmation -->
+      <AutoInstallPluginsStep
         v-else-if="currentStep === 2"
-        :plugins="availablePlugins"
-        :activePlugins="activePlugins"
+        :plugins="autoInstalledPlugins"
         :businessType="selectedBusinessType"
-        @toggle="onPluginToggled"
         @back="goBack"
-        @next="onPluginsNext"
+        @next="onAutoInstallNext"
       />
 
       <!-- Step 3: Configure -->
@@ -260,7 +245,6 @@ function goBack() {
   color: #f1f5f9;
 }
 
-/* Step Indicator */
 .step-indicator {
   display: flex;
   align-items: center;
@@ -331,7 +315,6 @@ function goBack() {
   background: #22c55e;
 }
 
-/* Step Content */
 .step-content {
   width: 100%;
   max-width: 760px;
