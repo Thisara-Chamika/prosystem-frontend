@@ -21,9 +21,8 @@ const menuItems = computed(() => {
     items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
     items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })
 
-    // Fashion plugin — show Variants if plugin is active
-    if (authStore.hasPlugin('fashion-shop')) {
-      items.push({ label: 'Variants', icon: 'pi pi-tag', route: '/variants' })
+    if (authStore.hasPlugin('product-variants')) {
+      items.push({ label: 'Variants', icon: 'pi pi-palette', route: '/variants' })
     }
   }
 

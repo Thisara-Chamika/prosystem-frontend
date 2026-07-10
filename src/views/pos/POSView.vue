@@ -27,6 +27,8 @@ import AutoComplete from 'primevue/autocomplete'
 const toast = useToast()
 const route = useRoute()
 
+const PLUGIN_ID = 'product-variants'
+
 // ── Product Search State ───────────────────────────
 const searchQuery = ref('')
 const products = ref<any[]>([])
@@ -53,21 +55,23 @@ const authStore = useAuthStore()
 const showVariantSelector = ref(false)
 const variantProduct = ref<any>(null)
 const productVariants = ref<any[]>([])
-const selectedSize = ref('')
-const selectedColor = ref('')
-const selectedVariant = ref<any>(null)
+const configAttributes = ref<{ name: string; options: string[] }[]>([])
+const selectedAttributes = ref<Record<string, string>>({})
 const variantQuantity = ref(1)
 const loadingVariants = ref(false)
 
-const availableSizes = computed(() => {
-  return [...new Set(productVariants.value.map((v: any) => v.size))]
-})
-
-const availableColors = computed(() => {
-  if (!selectedSize.value) return []
-  return productVariants.value
-    .filter((v: any) => v.size === selectedSize.value)
-    .map((v: any) => v.color)
+// The currently matching variant, derived purely from selectedAttributes
+const selectedVariant = computed(() => {
+  if (configAttributes.value.length === 0) return null
+  const allSelected = configAttributes.value.every((attr) => !!selectedAttributes.value[attr.name])
+  if (!allSelected) return null
+  return (
+    productVariants.value.find((v: any) =>
+      configAttributes.value.every(
+        (attr) => v.customAttributes?.[attr.name] === selectedAttributes.value[attr.name],
+      ),
+    ) || null
+  )
 })
 
 const variantFinalPrice = computed(() => {
@@ -77,29 +81,63 @@ const variantFinalPrice = computed(() => {
   )
 })
 
-function onSizeSelect(size: string) {
-  selectedSize.value = size
-  selectedColor.value = ''
-  selectedVariant.value = null
-  variantQuantity.value = 1
+// Returns the label text for a variant, e.g. "400ml / Dry"
+function variantLabel(variant: any): string {
+  return configAttributes.value
+    .map((attr) => variant.customAttributes?.[attr.name])
+    .filter((v): v is string => Boolean(v))
+    .join(' / ')
 }
 
-function onColorSelect(color: string) {
-  selectedColor.value = color
-  selectedVariant.value =
-    productVariants.value.find((v: any) => v.size === selectedSize.value && v.color === color) ||
-    null
-  variantQuantity.value = 1
-}
-
-function isSizeAvailable(size: string): boolean {
-  return productVariants.value.some((v: any) => v.size === size && v.quantity > 0)
-}
-
-function isColorAvailable(color: string): boolean {
-  return productVariants.value.some(
-    (v: any) => v.size === selectedSize.value && v.color === color && v.quantity > 0,
+// Options available for attribute at `index`, filtered by attributes already chosen before it
+function attributeOptions(index: number): string[] {
+  const attr = configAttributes.value[index]
+  if (!attr) return []
+  const priorAttrs = configAttributes.value.slice(0, index)
+  const matches = productVariants.value.filter((v: any) =>
+    priorAttrs.every((a) => v.customAttributes?.[a.name] === selectedAttributes.value[a.name]),
   )
+  return [...new Set(matches.map((v: any) => v.customAttributes?.[attr.name]).filter(Boolean))]
+}
+
+// Whether a specific option value still has stock, given prior selections
+function isOptionAvailable(index: number, value: string): boolean {
+  const attr = configAttributes.value[index]
+  if (!attr) return false
+  const priorAttrs = configAttributes.value.slice(0, index)
+  return productVariants.value.some(
+    (v: any) =>
+      priorAttrs.every((a) => v.customAttributes?.[a.name] === selectedAttributes.value[a.name]) &&
+      v.customAttributes?.[attr.name] === value &&
+      v.quantity > 0,
+  )
+}
+
+function isAttributeVisible(idx: number): boolean {
+  if (idx === 0) return true
+  const prevAttr = configAttributes.value[idx - 1]
+  return !!prevAttr && !!selectedAttributes.value[prevAttr.name]
+}
+
+// Selecting a value clears this attribute and everything after it (cascading reset)
+function selectAttributeValue(attrName: string, value: string) {
+  const idx = configAttributes.value.findIndex((a) => a.name === attrName)
+  configAttributes.value.slice(idx).forEach((a) => {
+    delete selectedAttributes.value[a.name]
+  })
+  selectedAttributes.value[attrName] = value
+  variantQuantity.value = 1
+}
+
+async function loadVariantConfig() {
+  try {
+    const response = await pluginService.getPluginConfig(PLUGIN_ID)
+    if (response.success) {
+      configAttributes.value = response.data.configuration?.attributes || []
+    }
+  } catch {
+    configAttributes.value = []
+  }
 }
 
 // ── Payment Methods ────────────────────────────────
@@ -245,16 +283,17 @@ async function handleProductClick(product: any) {
     return
   }
 
-  if (authStore.hasPlugin('fashion-shop')) {
+  if (authStore.hasPlugin(PLUGIN_ID)) {
     loadingVariants.value = true
     try {
+      if (configAttributes.value.length === 0) {
+        await loadVariantConfig()
+      }
       const response = await pluginService.getAvailableVariants(product.productId)
       if (response.success && response.data.length > 0) {
         variantProduct.value = product
         productVariants.value = response.data
-        selectedSize.value = ''
-        selectedColor.value = ''
-        selectedVariant.value = null
+        selectedAttributes.value = {}
         variantQuantity.value = 1
         showVariantSelector.value = true
         return
@@ -277,12 +316,13 @@ function addToCart(product: any, variant?: any, quantity = 1) {
     const cartKey = `${product.productId}-${variant.variantId}`
     const existing = cart.value.find((item: any) => item.cartKey === cartKey)
     const currentQty = existing?.quantity ?? 0
+    const label = variantLabel(variant)
 
     if (currentQty + quantity > availableStock) {
       toast.add({
         severity: 'warn',
         summary: 'Stock Limit',
-        detail: `Only ${availableStock} units available for ${variant.size} / ${variant.color}`,
+        detail: `Only ${availableStock} units available for ${label}`,
         life: 3000,
       })
       return
@@ -297,7 +337,7 @@ function addToCart(product: any, variant?: any, quantity = 1) {
         variantId: variant.variantId,
         productName: product.name,
         productSku: product.sku,
-        variantLabel: `${variant.size} / ${variant.color}`,
+        variantLabel: label,
         price: parseFloat(product.price) + parseFloat(variant.priceAdjustment || 0),
         taxRate: parseFloat(product.taxRate),
         quantity,
@@ -308,7 +348,7 @@ function addToCart(product: any, variant?: any, quantity = 1) {
     toast.add({
       severity: 'success',
       summary: 'Added',
-      detail: `${product.name} (${variant.size} / ${variant.color}) added to cart`,
+      detail: `${product.name} (${label}) added to cart`,
       life: 1500,
     })
     return
@@ -357,7 +397,7 @@ function addVariantToCart() {
     toast.add({
       severity: 'warn',
       summary: 'Required',
-      detail: 'Please select size and color',
+      detail: 'Please select all options',
       life: 3000,
     })
     return
@@ -1039,42 +1079,41 @@ onMounted(() => {
           Base Price: {{ authStore.formatCurrency(parseFloat(variantProduct.price)) }}
         </div>
 
-        <div class="variant-group">
-          <label class="variant-group-label">SELECT SIZE</label>
-          <div class="variant-options">
-            <button
-              v-for="size in availableSizes"
-              :key="size"
-              class="variant-option-btn"
-              :class="{ selected: selectedSize === size, disabled: !isSizeAvailable(size) }"
-              :disabled="!isSizeAvailable(size)"
-              @click="onSizeSelect(size)"
-            >
-              {{ size }}
-            </button>
-          </div>
+        <div class="no-config-warning" v-if="configAttributes.length === 0">
+          <i class="pi pi-exclamation-triangle" />
+          <span>No attributes configured for this plugin yet.</span>
         </div>
 
-        <div class="variant-group" v-if="selectedSize">
-          <label class="variant-group-label">SELECT COLOR</label>
-          <div class="variant-options">
-            <button
-              v-for="color in availableColors"
-              :key="color"
-              class="variant-option-btn color-btn"
-              :class="{ selected: selectedColor === color, disabled: !isColorAvailable(color) }"
-              :disabled="!isColorAvailable(color)"
-              @click="onColorSelect(color)"
-            >
-              {{ color }}
-            </button>
+        <!-- Dynamic attribute groups — one per configured attribute, cascading -->
+        <template v-for="(attr, idx) in configAttributes" :key="attr.name">
+          <div
+            <div
+  class="variant-group"
+  v-if="isAttributeVisible(idx)"
+>
+            <label class="variant-group-label">SELECT {{ attr.name.toUpperCase() }}</label>
+            <div class="variant-options">
+              <button
+                v-for="option in attributeOptions(idx)"
+                :key="option"
+                class="variant-option-btn"
+                :class="{
+                  selected: selectedAttributes[attr.name] === option,
+                  disabled: !isOptionAvailable(idx, option),
+                }"
+                :disabled="!isOptionAvailable(idx, option)"
+                @click="selectAttributeValue(attr.name, option)"
+              >
+                {{ option }}
+              </button>
+            </div>
           </div>
-        </div>
+        </template>
 
         <div class="variant-selected-info" v-if="selectedVariant">
           <div class="variant-info-row">
             <span>Selected:</span>
-            <span class="variant-info-value">{{ selectedSize }} / {{ selectedColor }}</span>
+            <span class="variant-info-value">{{ variantLabel(selectedVariant) }}</span>
           </div>
           <div class="variant-info-row">
             <span>Stock:</span>
@@ -1754,6 +1793,18 @@ onMounted(() => {
   border-radius: 6px;
 }
 
+.no-config-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #f59e0b;
+}
+
 .variant-group {
   display: flex;
   flex-direction: column;
@@ -1798,10 +1849,6 @@ onMounted(() => {
   opacity: 0.35;
   cursor: not-allowed;
   text-decoration: line-through;
-}
-
-.color-btn {
-  min-width: 80px;
 }
 
 .variant-selected-info {

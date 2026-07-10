@@ -22,6 +22,8 @@ const confirm = useConfirm()
 const authStore = useAuthStore()
 const router = useRouter()
 
+const PLUGIN_ID = 'product-variants'
+
 // ── Role guard ────────────────────────────────────
 const role = authStore.userRole
 if (role !== 'shop_owner' && role !== 'shop_manager') {
@@ -39,9 +41,8 @@ const variants = ref<any[]>([])
 const loadingVariants = ref(false)
 const reorderPoint = ref(0)
 
-// Plugin config (for dropdowns)
-const configSizes = ref<string[]>([])
-const configColors = ref<string[]>([])
+// Plugin config — dynamic attributes, e.g. [{name:'Size', options:[...]}, {name:'Color', options:[...]}]
+const configAttributes = ref<{ name: string; options: string[] }[]>([])
 
 // Add/Edit variant dialog
 const showVariantDialog = ref(false)
@@ -50,8 +51,7 @@ const editingVariant = ref<any>(null)
 const savingVariant = ref(false)
 
 const variantForm = ref({
-  size: '',
-  color: '',
+  customAttributes: {} as Record<string, string>,
   quantity: 0,
   skuVariant: '',
   priceAdjustment: 0,
@@ -82,7 +82,6 @@ async function loadProducts() {
     const response = await productService.getProducts(1, 100, 'product')
     if (response.success) {
       const activeProducts = response.data.filter((p: any) => p.isActive)
-      // Load variant count for each product
       const withVariants = await Promise.all(
         activeProducts.map(async (product: any) => {
           try {
@@ -112,14 +111,12 @@ async function loadProducts() {
 
 async function loadPluginConfig() {
   try {
-    const response = await pluginService.getPluginConfig('fashion-shop')
+    const response = await pluginService.getPluginConfig(PLUGIN_ID)
     if (response.success) {
-      configSizes.value = response.data.configuration?.sizes || []
-      configColors.value = response.data.configuration?.colors || []
+      configAttributes.value = response.data.configuration?.attributes || []
     }
   } catch {
-    configSizes.value = []
-    configColors.value = []
+    configAttributes.value = []
   }
 }
 
@@ -145,12 +142,19 @@ async function selectProduct(product: any) {
   }
 }
 
+function emptyAttributesObject(): Record<string, string> {
+  const obj: Record<string, string> = {}
+  configAttributes.value.forEach((attr) => {
+    obj[attr.name] = ''
+  })
+  return obj
+}
+
 function openAddVariant() {
   variantDialogMode.value = 'create'
   editingVariant.value = null
   variantForm.value = {
-    size: '',
-    color: '',
+    customAttributes: emptyAttributesObject(),
     quantity: 0,
     skuVariant: '',
     priceAdjustment: 0,
@@ -162,8 +166,7 @@ function openEditVariant(variant: any) {
   variantDialogMode.value = 'edit'
   editingVariant.value = variant
   variantForm.value = {
-    size: variant.size,
-    color: variant.color,
+    customAttributes: { ...emptyAttributesObject(), ...(variant.customAttributes || {}) },
     quantity: variant.quantity,
     skuVariant: variant.skuVariant,
     priceAdjustment: parseFloat(variant.priceAdjustment) || 0,
@@ -172,18 +175,30 @@ function openEditVariant(variant: any) {
 }
 
 function autoGenerateSku() {
-  if (selectedProduct.value && variantForm.value.size && variantForm.value.color) {
-    const colorCode = variantForm.value.color.substring(0, 3).toUpperCase()
-    variantForm.value.skuVariant = `${selectedProduct.value.sku}-${variantForm.value.size}-${colorCode}`
+  const values = configAttributes.value
+    .map((attr) => variantForm.value.customAttributes[attr.name])
+    .filter((v): v is string => Boolean(v))
+    .map((v) => v.substring(0, 3).toUpperCase())
+
+  if (
+    selectedProduct.value &&
+    values.length === configAttributes.value.length &&
+    values.length > 0
+  ) {
+    variantForm.value.skuVariant = `${selectedProduct.value.sku}-${values.join('-')}`
   }
 }
 
+function allAttributesFilled(): boolean {
+  return configAttributes.value.every((attr) => !!variantForm.value.customAttributes[attr.name])
+}
+
 async function saveVariant() {
-  if (!variantForm.value.size || !variantForm.value.color) {
+  if (!allAttributesFilled()) {
     toast.add({
       severity: 'warn',
       summary: 'Required',
-      detail: 'Size and color are required',
+      detail: 'Please select all attribute values',
       life: 3000,
     })
     return
@@ -192,13 +207,14 @@ async function saveVariant() {
   savingVariant.value = true
   try {
     if (variantDialogMode.value === 'create') {
-      const response = await pluginService.createVariant(
-        selectedProduct.value.productId,
-        variantForm.value,
-      )
+      const response = await pluginService.createVariant(selectedProduct.value.productId, {
+        customAttributes: variantForm.value.customAttributes,
+        quantity: variantForm.value.quantity,
+        skuVariant: variantForm.value.skuVariant,
+        priceAdjustment: variantForm.value.priceAdjustment,
+      })
       if (response.success) {
         variants.value.push(response.data)
-        // Update variant count in product list
         const idx = products.value.findIndex(
           (p: any) => p.productId === selectedProduct.value.productId,
         )
@@ -213,8 +229,7 @@ async function saveVariant() {
       }
     } else {
       const response = await pluginService.updateVariant(editingVariant.value.variantId, {
-        size: variantForm.value.size,
-        color: variantForm.value.color,
+        customAttributes: variantForm.value.customAttributes,
         quantity: variantForm.value.quantity,
         priceAdjustment: variantForm.value.priceAdjustment,
       })
@@ -244,9 +259,16 @@ async function saveVariant() {
   }
 }
 
+function variantLabel(variant: any): string {
+  return configAttributes.value
+    .map((attr) => variant.customAttributes?.[attr.name])
+    .filter(Boolean)
+    .join(' / ')
+}
+
 function confirmDeleteVariant(variant: any) {
   confirm.require({
-    message: `Delete variant ${variant.size} / ${variant.color}?`,
+    message: `Delete variant ${variantLabel(variant)}?`,
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     rejectProps: { label: 'Cancel', severity: 'secondary' },
@@ -291,8 +313,8 @@ onMounted(() => {
     <!-- Page Header -->
     <div class="page-header">
       <div>
-        <h1 class="page-title">👗 Variant Manager</h1>
-        <p class="page-subtitle">Manage size and color variants for your products</p>
+        <h1 class="page-title">🎨 Variant Manager</h1>
+        <p class="page-subtitle">Manage variants for your products</p>
       </div>
     </div>
 
@@ -339,14 +361,12 @@ onMounted(() => {
 
       <!-- Right: Variant Detail -->
       <div class="variants-panel">
-        <!-- No product selected -->
         <div class="no-selection" v-if="!selectedProduct">
           <i class="pi pi-tag" />
           <p>Select a product to manage variants</p>
         </div>
 
         <template v-else>
-          <!-- Panel Header -->
           <div class="variants-panel-header">
             <div>
               <h2 class="panel-title">{{ selectedProduct.name }}</h2>
@@ -355,23 +375,25 @@ onMounted(() => {
             <Button label="Add Variant" icon="pi pi-plus" size="small" @click="openAddVariant" />
           </div>
 
-          <!-- Loading variants -->
           <div class="loading-state" v-if="loadingVariants">
             <i class="pi pi-spin pi-spinner" />
             <p>Loading variants...</p>
           </div>
 
-          <!-- Empty variants -->
           <div class="empty-state" v-else-if="variants.length === 0">
             <i class="pi pi-tag" />
             <p>No variants yet. Add your first variant.</p>
           </div>
 
-          <!-- Variants Table -->
+          <!-- Variants Table — dynamic columns from configAttributes -->
           <div class="variants-table" v-else>
-            <div class="variants-table-header">
-              <span>Size</span>
-              <span>Color</span>
+            <div
+              class="variants-table-header"
+              :style="{
+                gridTemplateColumns: `${configAttributes.map(() => '100px').join(' ')} 1fr 80px 100px 110px 80px`,
+              }"
+            >
+              <span v-for="attr in configAttributes" :key="attr.name">{{ attr.name }}</span>
               <span>SKU</span>
               <span>Stock</span>
               <span>Price Adj.</span>
@@ -379,11 +401,19 @@ onMounted(() => {
               <span>Actions</span>
             </div>
 
-            <div v-for="variant in variants" :key="variant.variantId" class="variant-row">
-              <span class="variant-cell">
-                <span class="variant-size-badge">{{ variant.size }}</span>
+            <div
+              v-for="variant in variants"
+              :key="variant.variantId"
+              class="variant-row"
+              :style="{
+                gridTemplateColumns: `${configAttributes.map(() => '100px').join(' ')} 1fr 80px 100px 110px 80px`,
+              }"
+            >
+              <span v-for="attr in configAttributes" :key="attr.name" class="variant-cell">
+                <span class="variant-attr-badge">{{
+                  variant.customAttributes?.[attr.name] || '—'
+                }}</span>
               </span>
-              <span class="variant-cell">{{ variant.color }}</span>
               <span class="variant-cell variant-sku">{{ variant.skuVariant }}</span>
               <span class="variant-cell">
                 <span
@@ -451,33 +481,30 @@ onMounted(() => {
       modal
     >
       <div class="dialog-form">
-        <div class="form-row">
-          <div class="field">
-            <label>Size *</label>
+        <!-- Dynamic attribute dropdowns -->
+        <div class="form-row" v-if="configAttributes.length > 0">
+          <div class="field" v-for="attr in configAttributes" :key="attr.name">
+            <label>{{ attr.name }} *</label>
             <Select
-              v-model="variantForm.size"
-              :options="configSizes"
-              placeholder="Select size"
-              class="w-full"
-              @change="autoGenerateSku"
-            />
-          </div>
-          <div class="field">
-            <label>Color *</label>
-            <Select
-              v-model="variantForm.color"
-              :options="configColors"
-              placeholder="Select color"
+              v-model="variantForm.customAttributes[attr.name]"
+              :options="attr.options"
+              :placeholder="`Select ${attr.name}`"
               class="w-full"
               @change="autoGenerateSku"
             />
           </div>
         </div>
+        <div v-else class="no-config-warning">
+          <i class="pi pi-exclamation-triangle" />
+          <span
+            >No attributes configured yet. Configure this plugin in Settings → Plugins first.</span
+          >
+        </div>
 
         <div class="field" v-if="variantDialogMode === 'create'">
           <label>SKU Variant</label>
           <InputText v-model="variantForm.skuVariant" placeholder="Auto-generated" class="w-full" />
-          <span class="field-hint">Auto-generated from product SKU + size + color</span>
+          <span class="field-hint">Auto-generated from product SKU + attribute values</span>
         </div>
 
         <div class="form-row">
@@ -536,7 +563,6 @@ onMounted(() => {
   margin: 0.25rem 0 0;
 }
 
-/* ── Layout ── */
 .variants-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -544,7 +570,6 @@ onMounted(() => {
   min-height: calc(100vh - 200px);
 }
 
-/* ── Products Panel ── */
 .products-panel {
   background: #1e293b;
   border: 1px solid #334155;
@@ -635,7 +660,6 @@ onMounted(() => {
   color: #475569;
 }
 
-/* ── Variants Panel ── */
 .variants-panel {
   background: #1e293b;
   border: 1px solid #334155;
@@ -682,7 +706,6 @@ onMounted(() => {
   font-family: monospace;
 }
 
-/* ── Variants Table ── */
 .variants-table {
   display: flex;
   flex-direction: column;
@@ -694,7 +717,6 @@ onMounted(() => {
 
 .variants-table-header {
   display: grid;
-  grid-template-columns: 80px 100px 1fr 80px 100px 110px 80px;
   gap: 0.5rem;
   padding: 0.6rem 1rem;
   background: #0f172a;
@@ -707,7 +729,6 @@ onMounted(() => {
 
 .variant-row {
   display: grid;
-  grid-template-columns: 80px 100px 1fr 80px 100px 110px 80px;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
   border-top: 1px solid #334155;
@@ -729,7 +750,7 @@ onMounted(() => {
   color: #64748b;
 }
 
-.variant-size-badge {
+.variant-attr-badge {
   background: #334155;
   color: #f1f5f9;
   padding: 0.2rem 0.5rem;
@@ -756,7 +777,6 @@ onMounted(() => {
   gap: 0.25rem;
 }
 
-/* ── Empty / Loading ── */
 .loading-state {
   text-align: center;
   padding: 3rem;
@@ -785,7 +805,6 @@ onMounted(() => {
   font-size: 2rem;
 }
 
-/* ── Dialog ── */
 .dialog-form {
   display: flex;
   flex-direction: column;
@@ -814,6 +833,18 @@ onMounted(() => {
 .field-hint {
   font-size: 0.75rem;
   color: #64748b;
+}
+
+.no-config-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #f59e0b;
 }
 
 .w-full {
