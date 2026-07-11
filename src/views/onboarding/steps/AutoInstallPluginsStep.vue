@@ -1,18 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import categoryService from '../../../services/categoryService'
 import Button from 'primevue/button'
 
 const props = defineProps<{
+  plugins: any[]
   businessType: string
 }>()
 
 const emit = defineEmits<{
   next: []
+  back: []
 }>()
-
-const categories = ref<string[]>([])
-const loading = ref(false)
 
 const businessEmoji: Record<string, string> = {
   'fashion-shop': '👗',
@@ -31,61 +28,45 @@ const businessName: Record<string, string> = {
   supermarket: 'Supermarket',
   'electronics-shop': 'Electronics Shop',
 }
-
-async function loadCategories() {
-  loading.value = true
-  try {
-    const response = await categoryService.getCategories()
-    if (response.success) {
-      categories.value = response.data.map((c: any) => c.name)
-    }
-  } catch {
-    categories.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  loadCategories()
-})
 </script>
 
 <template>
   <div class="step-card">
     <div class="step-header">
-      <p class="step-number">Step 1 of 3</p>
+      <p class="step-number">Step 2 of 3</p>
       <h2 class="step-title">{{ businessEmoji[businessType] || '🎉' }} Great choice!</h2>
       <p class="step-desc">
-        We've set up these default categories for your
-        <strong>{{ businessName[businessType] || businessType }}</strong
-        >:
+        We've set up your <strong>{{ businessName[businessType] || businessType }}</strong> with:
       </p>
     </div>
 
-    <div class="categories-loading" v-if="loading">
-      <i class="pi pi-spin pi-spinner" />
-      <span>Loading your categories...</span>
-    </div>
-
-    <div class="categories-list" v-else>
-      <div v-for="category in categories" :key="category" class="category-item">
-        <i class="pi pi-check-circle category-check" />
-        <span>{{ category }}</span>
+    <div class="plugins-list">
+      <div v-for="plugin in plugins" :key="plugin.id" class="plugin-item">
+        <i class="pi pi-check-circle plugin-check" />
+        <div class="plugin-info">
+          <span class="plugin-name">{{ plugin.icon }} {{ plugin.name }}</span>
+          <span class="plugin-desc">{{ plugin.description }}</span>
+        </div>
       </div>
 
-      <div class="empty-state" v-if="categories.length === 0">
-        <p>No categories found.</p>
+      <div v-if="plugins.length === 0" class="empty-state">
+        <p>No additional features to set up.</p>
       </div>
     </div>
 
     <div class="customize-note">
       <i class="pi pi-info-circle" />
-      <span>You can customize these anytime in <strong>Settings → Categories</strong></span>
+      <span>You can add or remove features anytime from <strong>Settings → Plugins</strong></span>
     </div>
 
     <div class="step-nav">
-      <Button label="Continue" icon="pi pi-arrow-right" icon-pos="right" @click="emit('next')" />
+      <Button label="Back" severity="secondary" icon="pi pi-arrow-left" @click="emit('back')" />
+      <Button
+        label="Continue to Setup"
+        icon="pi pi-arrow-right"
+        icon-pos="right"
+        @click="emit('next')"
+      />
     </div>
   </div>
 </template>
@@ -134,36 +115,44 @@ onMounted(() => {
   color: #f1f5f9;
 }
 
-.categories-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #64748b;
-  padding: 1rem 0;
-}
-
-.categories-list {
+.plugins-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.category-item {
+.plugin-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.875rem 1rem;
   background: #0f172a;
   border: 1px solid #334155;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: #f1f5f9;
-  font-weight: 500;
+  border-radius: 10px;
 }
 
-.category-check {
+.plugin-check {
   color: #22c55e;
-  font-size: 1rem;
+  font-size: 1.1rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.plugin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.plugin-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.plugin-desc {
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
 .empty-state {
@@ -196,7 +185,7 @@ onMounted(() => {
 
 .step-nav {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding-top: 1rem;
   border-top: 1px solid #334155;
 }

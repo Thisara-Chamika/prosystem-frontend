@@ -33,13 +33,15 @@ const pluginService = {
 
   // GET /api/plugins/fashion/products/:productId/variants
   async getVariants(productId: string): Promise<any> {
-    const response = await api.get(`/api/plugins/fashion/products/${productId}/variants`)
+    const response = await api.get(`/api/plugins/product-variants/products/${productId}/variants`)
     return response.data
   },
 
   // GET /api/plugins/fashion/products/:productId/variants/available
   async getAvailableVariants(productId: string): Promise<any> {
-    const response = await api.get(`/api/plugins/fashion/products/${productId}/variants/available`)
+    const response = await api.get(
+      `/api/plugins/product-variants/products/${productId}/variants/available`,
+    )
     return response.data
   },
 
@@ -47,14 +49,16 @@ const pluginService = {
   async createVariant(
     productId: string,
     data: {
-      size: string
-      color: string
+      customAttributes: Record<string, string>
       quantity: number
       skuVariant: string
       priceAdjustment: number
     },
   ): Promise<any> {
-    const response = await api.post(`/api/plugins/fashion/products/${productId}/variants`, data)
+    const response = await api.post(
+      `/api/plugins/product-variants/products/${productId}/variants`,
+      data,
+    )
     return response.data
   },
 
@@ -62,19 +66,18 @@ const pluginService = {
   async updateVariant(
     variantId: string,
     data: {
-      size?: string
-      color?: string
+      customAttributes?: Record<string, string>
       quantity?: number
       priceAdjustment?: number
     },
   ): Promise<any> {
-    const response = await api.put(`/api/plugins/fashion/variants/${variantId}`, data)
+    const response = await api.put(`/api/plugins/product-variants/variants/${variantId}`, data)
     return response.data
   },
 
   // DELETE /api/plugins/fashion/variants/:variantId
   async deleteVariant(variantId: string): Promise<any> {
-    const response = await api.delete(`/api/plugins/fashion/variants/${variantId}`)
+    const response = await api.delete(`/api/plugins/product-variants/variants/${variantId}`)
     return response.data
   },
 }

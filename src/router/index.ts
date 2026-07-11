@@ -124,7 +124,7 @@ router.beforeEach(async (to, _from) => {
 
   // Plugin route guard
   if (to.name === 'variants') {
-    const hasPlugin = authStore.shop?.activePlugins?.includes('fashion-shop') ?? false
+    const hasPlugin = authStore.shop?.activePlugins?.includes('product-variants') ?? false
     if (!hasPlugin) {
       return { name: 'dashboard' }
     }
