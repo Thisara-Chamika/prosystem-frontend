@@ -75,10 +75,9 @@ const showInstallDialog = ref(false)
 const showUninstallDialog = ref(false)
 const showConfigureDialog = ref(false)
 const selectedPlugin = ref<any>(null)
-const pluginConfig = ref<any>(null)
+const pluginConfig = ref<{ attributes: { name: string; options: string[] }[] } | null>(null)
 const savingConfig = ref(false)
-const newSize = ref('')
-const newColor = ref('')
+const newOptionInputs = ref<string[]>([])
 
 const activePluginsList = computed(() => plugins.value.filter((p: any) => p.isInstalled))
 const availablePluginsList = computed(() => plugins.value.filter((p: any) => !p.isInstalled))
@@ -506,40 +505,65 @@ async function openConfigure(plugin: any) {
   try {
     const response = await pluginService.getPluginConfig(plugin.id)
     if (response.success) {
+      const attrs = response.data.configuration?.attributes || []
       pluginConfig.value = {
-        sizes: [...(response.data.configuration?.sizes || [])],
-        colors: [...(response.data.configuration?.colors || [])],
+        attributes: attrs.map((a: any) => ({ name: a.name, options: [...(a.options || [])] })),
       }
+      newOptionInputs.value = attrs.map(() => '')
     }
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load config', life: 3000 })
   }
 }
 
-function addSize() {
-  const s = newSize.value.trim().toUpperCase()
-  if (!s || pluginConfig.value.sizes.includes(s)) return
-  pluginConfig.value.sizes.push(s)
-  newSize.value = ''
+function addAttribute() {
+  if (!pluginConfig.value) return
+  pluginConfig.value.attributes.push({ name: '', options: [] })
+  newOptionInputs.value.push('')
 }
 
-function removeSize(size: string) {
-  pluginConfig.value.sizes = pluginConfig.value.sizes.filter((s: string) => s !== size)
+function removeAttribute(index: number) {
+  if (!pluginConfig.value) return
+  pluginConfig.value.attributes.splice(index, 1)
+  newOptionInputs.value.splice(index, 1)
 }
 
-function addColor() {
-  const c = newColor.value.trim()
-  if (!c || pluginConfig.value.colors.includes(c)) return
-  pluginConfig.value.colors.push(c)
-  newColor.value = ''
+function addOption(attrIndex: number) {
+  if (!pluginConfig.value) return
+  const value = newOptionInputs.value[attrIndex]?.trim()
+  if (!value) return
+  const attr = pluginConfig.value.attributes[attrIndex]
+  if (!attr || attr.options.includes(value)) return
+  attr.options.push(value)
+  newOptionInputs.value[attrIndex] = ''
 }
 
-function removeColor(color: string) {
-  pluginConfig.value.colors = pluginConfig.value.colors.filter((c: string) => c !== color)
+function removeOption(attrIndex: number, option: string) {
+  if (!pluginConfig.value) return
+  const attr = pluginConfig.value.attributes[attrIndex]
+  if (!attr) return
+  attr.options = attr.options.filter((o) => o !== option)
 }
 
 async function saveConfig() {
   if (!selectedPlugin.value || !pluginConfig.value) return
+
+  const unnamed = pluginConfig.value.attributes.find((a) => !a.name.trim())
+  if (unnamed) {
+    toast.add({ severity: 'warn', summary: 'Required', detail: 'Every attribute needs a name', life: 3000 })
+    return
+  }
+  const emptyOptions = pluginConfig.value.attributes.find((a) => a.options.length === 0)
+  if (emptyOptions) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Required',
+      detail: `"${emptyOptions.name}" needs at least one option`,
+      life: 3000,
+    })
+    return
+  }
+
   savingConfig.value = true
   try {
     const response = await pluginService.updatePluginConfig(
@@ -1686,60 +1710,66 @@ onMounted(() => {
 
     <!-- Configure Dialog -->
     <Dialog
-      v-model:visible="showConfigureDialog"
-      header="Configure Plugin"
-      :style="{ width: '500px' }"
-      modal
-    >
-      <div class="config-form" v-if="pluginConfig">
-        <div class="config-section">
-          <h4 class="config-label">Sizes</h4>
-          <div class="tag-list">
-            <span v-for="size in pluginConfig.sizes" :key="size" class="config-tag">
-              {{ size }}
-              <button class="tag-remove" @click="removeSize(size)">×</button>
-            </span>
-          </div>
-          <div class="tag-add-row">
-            <InputText
-              v-model="newSize"
-              placeholder="Add size (e.g. XXS)"
-              class="tag-input"
-              @keyup.enter="addSize"
-            />
-            <Button label="Add" size="small" severity="secondary" @click="addSize" />
-          </div>
-        </div>
+  v-model:visible="showConfigureDialog"
+  header="Configure Plugin"
+  :style="{ width: '520px' }"
+  modal
+>
+  <div class="config-form" v-if="pluginConfig">
+    <div v-for="(attr, idx) in pluginConfig.attributes" :key="idx" class="attribute-block">
+      <div class="attribute-block-header">
+        <span class="config-label">Attribute {{ idx + 1 }}</span>
+        <Button icon="pi pi-trash" size="small" severity="danger" text @click="removeAttribute(idx)" />
+      </div>
 
-        <div class="config-section">
-          <h4 class="config-label">Colors</h4>
-          <div class="tag-list">
-            <span v-for="color in pluginConfig.colors" :key="color" class="config-tag">
-              {{ color }}
-              <button class="tag-remove" @click="removeColor(color)">×</button>
-            </span>
-          </div>
-          <div class="tag-add-row">
-            <InputText
-              v-model="newColor"
-              placeholder="Add color (e.g. Purple)"
-              class="tag-input"
-              @keyup.enter="addColor"
-            />
-            <Button label="Add" size="small" severity="secondary" @click="addColor" />
-          </div>
+      <div class="field">
+        <label>Name</label>
+        <InputText v-model="attr.name" placeholder="e.g. Volume" class="w-full" />
+      </div>
+
+      <div class="field">
+        <label>Options</label>
+        <div class="tag-list">
+          <span v-for="option in attr.options" :key="option" class="config-tag">
+            {{ option }}
+            <button class="tag-remove" @click="removeOption(idx, option)">×</button>
+          </span>
+        </div>
+        <div class="tag-add-row">
+          <InputText
+            v-model="newOptionInputs[idx]"
+            placeholder="Add option"
+            class="tag-input"
+            @keyup.enter="addOption(idx)"
+          />
+          <Button label="Add" size="small" severity="secondary" @click="addOption(idx)" />
         </div>
       </div>
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showConfigureDialog = false" />
-        <Button
-          label="Save Configuration"
-          icon="pi pi-check"
-          :loading="savingConfig"
-          @click="saveConfig"
-        />
-      </template>
-    </Dialog>
+    </div>
+
+    <Button
+      label="Add Another Attribute"
+      icon="pi pi-plus"
+      severity="secondary"
+      class="w-full"
+      @click="addAttribute"
+    />
+
+    <div v-if="pluginConfig.attributes.length === 0" class="empty-attributes">
+      <i class="pi pi-info-circle" />
+      <span>No attributes yet. Add one to start tracking variants.</span>
+    </div>
+  </div>
+  <template #footer>
+    <Button label="Cancel" severity="secondary" @click="showConfigureDialog = false" />
+    <Button
+      label="Save Configuration"
+      icon="pi pi-check"
+      :loading="savingConfig"
+      @click="saveConfig"
+    />
+  </template>
+</Dialog>
   </div>
 </template>
 
@@ -2630,5 +2660,30 @@ onMounted(() => {
 .status-pending {
   background: rgba(245, 158, 11, 0.1);
   color: #f59e0b;
+}
+
+.attribute-block {
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.attribute-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.empty-attributes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: #64748b;
+  font-size: 0.875rem;
 }
 </style>
