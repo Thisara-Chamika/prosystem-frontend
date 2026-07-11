@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import shopService from '../../services/shopService'
 import { useAuthStore } from '../../stores/authStore'
@@ -75,10 +75,12 @@ const showInstallDialog = ref(false)
 const showUninstallDialog = ref(false)
 const showConfigureDialog = ref(false)
 const selectedPlugin = ref<any>(null)
-const pluginConfig = ref<any>(null)
+const pluginConfig = ref<{ attributes: { name: string; options: string[] }[] } | null>(null)
 const savingConfig = ref(false)
-const newSize = ref('')
-const newColor = ref('')
+const newOptionInputs = ref<string[]>([])
+
+const activePluginsList = computed(() => plugins.value.filter((p: any) => p.isInstalled))
+const availablePluginsList = computed(() => plugins.value.filter((p: any) => !p.isInstalled))
 
 // Loyalty tab
 const loyaltySettings = ref<any>({
@@ -90,6 +92,16 @@ const loyaltySettings = ref<any>({
   goldThreshold: 2001,
 })
 const savingLoyalty = ref(false)
+
+// Notifications tab
+const emailPreferences = ref<any>({
+  receiptEmails: true,
+  customerWelcomeEmails: true,
+  staffWelcomeEmail: true,
+  lowStockAlerts: true,
+})
+const savingNotifications = ref(false)
+const welcomeEmailSent = ref(false)
 
 // Audit Log tab
 const auditSummary = ref<any>(null)
@@ -493,40 +505,65 @@ async function openConfigure(plugin: any) {
   try {
     const response = await pluginService.getPluginConfig(plugin.id)
     if (response.success) {
+      const attrs = response.data.configuration?.attributes || []
       pluginConfig.value = {
-        sizes: [...(response.data.configuration?.sizes || [])],
-        colors: [...(response.data.configuration?.colors || [])],
+        attributes: attrs.map((a: any) => ({ name: a.name, options: [...(a.options || [])] })),
       }
+      newOptionInputs.value = attrs.map(() => '')
     }
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load config', life: 3000 })
   }
 }
 
-function addSize() {
-  const s = newSize.value.trim().toUpperCase()
-  if (!s || pluginConfig.value.sizes.includes(s)) return
-  pluginConfig.value.sizes.push(s)
-  newSize.value = ''
+function addAttribute() {
+  if (!pluginConfig.value) return
+  pluginConfig.value.attributes.push({ name: '', options: [] })
+  newOptionInputs.value.push('')
 }
 
-function removeSize(size: string) {
-  pluginConfig.value.sizes = pluginConfig.value.sizes.filter((s: string) => s !== size)
+function removeAttribute(index: number) {
+  if (!pluginConfig.value) return
+  pluginConfig.value.attributes.splice(index, 1)
+  newOptionInputs.value.splice(index, 1)
 }
 
-function addColor() {
-  const c = newColor.value.trim()
-  if (!c || pluginConfig.value.colors.includes(c)) return
-  pluginConfig.value.colors.push(c)
-  newColor.value = ''
+function addOption(attrIndex: number) {
+  if (!pluginConfig.value) return
+  const value = newOptionInputs.value[attrIndex]?.trim()
+  if (!value) return
+  const attr = pluginConfig.value.attributes[attrIndex]
+  if (!attr || attr.options.includes(value)) return
+  attr.options.push(value)
+  newOptionInputs.value[attrIndex] = ''
 }
 
-function removeColor(color: string) {
-  pluginConfig.value.colors = pluginConfig.value.colors.filter((c: string) => c !== color)
+function removeOption(attrIndex: number, option: string) {
+  if (!pluginConfig.value) return
+  const attr = pluginConfig.value.attributes[attrIndex]
+  if (!attr) return
+  attr.options = attr.options.filter((o) => o !== option)
 }
 
 async function saveConfig() {
   if (!selectedPlugin.value || !pluginConfig.value) return
+
+  const unnamed = pluginConfig.value.attributes.find((a) => !a.name.trim())
+  if (unnamed) {
+    toast.add({ severity: 'warn', summary: 'Required', detail: 'Every attribute needs a name', life: 3000 })
+    return
+  }
+  const emptyOptions = pluginConfig.value.attributes.find((a) => a.options.length === 0)
+  if (emptyOptions) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Required',
+      detail: `"${emptyOptions.name}" needs at least one option`,
+      life: 3000,
+    })
+    return
+  }
+
   savingConfig.value = true
   try {
     const response = await pluginService.updatePluginConfig(
@@ -591,6 +628,53 @@ async function saveLoyaltySettings() {
     })
   } finally {
     savingLoyalty.value = false
+  }
+}
+
+async function loadEmailPreferences() {
+  try {
+    const response = await shopService.getEmailPreferences()
+    if (response.success) {
+      emailPreferences.value = {
+        receiptEmails: response.data.receiptEmails,
+        customerWelcomeEmails: response.data.customerWelcomeEmails,
+        staffWelcomeEmail: response.data.staffWelcomeEmail,
+        lowStockAlerts: response.data.lowStockAlerts,
+      }
+    }
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load email preferences',
+      life: 3000,
+    })
+  }
+  // welcomeEmailSent comes from the shop object, not preferences
+  welcomeEmailSent.value = authStore.shop?.welcomeEmailSent ?? false
+}
+
+async function saveEmailPreferences() {
+  savingNotifications.value = true
+  try {
+    const response = await shopService.updateEmailPreferences(emailPreferences.value)
+    if (response.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Saved',
+        detail: 'Email preferences updated',
+        life: 3000,
+      })
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.message || 'Failed to save',
+      life: 3000,
+    })
+  } finally {
+    savingNotifications.value = false
   }
 }
 
@@ -774,6 +858,7 @@ onMounted(() => {
   loadCategories()
   loadPlugins()
   loadLoyaltySettings()
+  loadEmailPreferences()
 })
 </script>
 
@@ -804,7 +889,8 @@ onMounted(() => {
           <Tab value="2">Categories</Tab>
           <Tab value="3">Plugins</Tab>
           <Tab value="4">Loyalty</Tab>
-          <Tab value="5">Audit Log</Tab>
+          <Tab value="5">Notifications</Tab>
+          <Tab value="6">Audit Log</Tab>
         </TabList>
 
         <TabPanels>
@@ -1032,65 +1118,116 @@ onMounted(() => {
                 <p>Loading plugins...</p>
               </div>
 
-              <div class="plugin-list" v-else>
-                <div v-for="plugin in plugins" :key="plugin.id" class="plugin-card">
-                  <div class="plugin-header">
-                    <div class="plugin-icon">{{ plugin.icon }}</div>
-                    <div class="plugin-info">
-                      <span class="plugin-name">{{ plugin.name }}</span>
-                      <span class="plugin-version">v{{ plugin.version }}</span>
-                    </div>
-                    <div class="plugin-status">
-                      <span v-if="plugin.isInstalled" class="status-badge installed">
-                        <i class="pi pi-check-circle" /> Installed
-                      </span>
+              <template v-else>
+                <!-- Active Plugins Section -->
+                <div class="plugin-section">
+                  <h3 class="plugin-section-title">Active Plugins</h3>
+                  <p class="plugin-section-desc">Currently installed and running</p>
+
+                  <div class="plugin-list" v-if="activePluginsList.length > 0">
+                    <div v-for="plugin in activePluginsList" :key="plugin.id" class="plugin-card">
+                      <div class="plugin-header">
+                        <div class="plugin-icon">{{ plugin.icon }}</div>
+                        <div class="plugin-info">
+                          <span class="plugin-name">{{ plugin.name }}</span>
+                          <span class="plugin-version">v{{ plugin.version }}</span>
+                        </div>
+                        <div class="plugin-status">
+                          <span class="status-badge installed">
+                            <i class="pi pi-check-circle" /> Active
+                          </span>
+                        </div>
+                      </div>
+
+                      <p class="plugin-desc">{{ plugin.description }}</p>
+
+                      <div class="plugin-features">
+                        <div
+                          v-for="feature in plugin.features"
+                          :key="feature"
+                          class="plugin-feature"
+                        >
+                          <i class="pi pi-check" />
+                          <span>{{ feature }}</span>
+                        </div>
+                      </div>
+
+                      <div class="plugin-actions">
+                        <Button
+                          label="Configure"
+                          icon="pi pi-cog"
+                          severity="secondary"
+                          size="small"
+                          @click="openConfigure(plugin)"
+                        />
+                        <Button
+                          label="Uninstall"
+                          icon="pi pi-trash"
+                          severity="danger"
+                          size="small"
+                          :loading="uninstallingPlugin === plugin.id"
+                          @click="confirmUninstall(plugin)"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <p class="plugin-desc">{{ plugin.description }}</p>
-
-                  <div class="plugin-features">
-                    <div v-for="feature in plugin.features" :key="feature" class="plugin-feature">
-                      <i class="pi pi-check" />
-                      <span>{{ feature }}</span>
-                    </div>
-                  </div>
-
-                  <div class="plugin-actions">
-                    <template v-if="plugin.isInstalled">
-                      <Button
-                        label="Configure"
-                        icon="pi pi-cog"
-                        severity="secondary"
-                        size="small"
-                        @click="openConfigure(plugin)"
-                      />
-                      <Button
-                        label="Uninstall"
-                        icon="pi pi-trash"
-                        severity="danger"
-                        size="small"
-                        :loading="uninstallingPlugin === plugin.id"
-                        @click="confirmUninstall(plugin)"
-                      />
-                    </template>
-                    <template v-else>
-                      <Button
-                        label="Install"
-                        icon="pi pi-download"
-                        size="small"
-                        :loading="installingPlugin === plugin.id"
-                        @click="confirmInstall(plugin)"
-                      />
-                    </template>
+                  <div v-else class="empty-plugins">
+                    <i class="pi pi-puzzle" />
+                    <p>No active plugins yet</p>
                   </div>
                 </div>
 
-                <div v-if="plugins.length === 0" class="empty-plugins">
-                  <i class="pi pi-puzzle" />
-                  <p>No plugins available</p>
+                <!-- Available Plugins Section -->
+                <div class="plugin-section">
+                  <h3 class="plugin-section-title">Available Plugins</h3>
+                  <p class="plugin-section-desc">Compatible with your shop type</p>
+
+                  <div class="plugin-list" v-if="availablePluginsList.length > 0">
+                    <div
+                      v-for="plugin in availablePluginsList"
+                      :key="plugin.id"
+                      class="plugin-card"
+                    >
+                      <div class="plugin-header">
+                        <div class="plugin-icon">{{ plugin.icon }}</div>
+                        <div class="plugin-info">
+                          <span class="plugin-name">{{ plugin.name }}</span>
+                          <span class="plugin-version">v{{ plugin.version }}</span>
+                        </div>
+                      </div>
+
+                      <p class="plugin-desc">{{ plugin.description }}</p>
+
+                      <div class="plugin-features">
+                        <div
+                          v-for="feature in plugin.features"
+                          :key="feature"
+                          class="plugin-feature"
+                        >
+                          <i class="pi pi-check" />
+                          <span>{{ feature }}</span>
+                        </div>
+                      </div>
+
+                      <div class="plugin-actions">
+                        <Button
+                          label="Install"
+                          icon="pi pi-download"
+                          size="small"
+                          :loading="installingPlugin === plugin.id"
+                          @click="confirmInstall(plugin)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else class="empty-plugins">
+                    <i class="pi pi-check-circle" />
+                    <p>All compatible plugins are already active</p>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
           </TabPanel>
 
@@ -1202,8 +1339,126 @@ onMounted(() => {
             </div>
           </TabPanel>
 
-          <!-- ── Tab 6: Audit Log ── -->
+          <!-- ── Tab 6: Email Notifications ── -->
+
           <TabPanel value="5">
+            <div class="tab-content">
+              <p class="card-desc" style="padding: 0 0.25rem">
+                Manage automated email notifications sent by ProSystem.
+              </p>
+
+              <!-- Customer Emails -->
+              <div class="settings-card">
+                <h3 class="card-title">Customer Emails</h3>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">📧</span>
+                    <span class="notif-label">Receipt Emails</span>
+                    <span class="notif-desc"
+                      >Send receipt to customer after purchase (only if customer has email on
+                      file)</span
+                    >
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.receiptEmails }"
+                    @click="emailPreferences.receiptEmails = !emailPreferences.receiptEmails"
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">👋</span>
+                    <span class="notif-label">Customer Welcome Emails</span>
+                    <span class="notif-desc">Welcome new customers when they're added</span>
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.customerWelcomeEmails }"
+                    @click="
+                      emailPreferences.customerWelcomeEmails =
+                        !emailPreferences.customerWelcomeEmails
+                    "
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Team Emails -->
+              <div class="settings-card">
+                <h3 class="card-title">Team Emails</h3>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">👨‍💼</span>
+                    <span class="notif-label">Staff Welcome Emails</span>
+                    <span class="notif-desc">Notify new staff members when added</span>
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.staffWelcomeEmail }"
+                    @click="
+                      emailPreferences.staffWelcomeEmail = !emailPreferences.staffWelcomeEmail
+                    "
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">🎉</span>
+                    <span class="notif-label">Shop Welcome Email</span>
+                    <span class="notif-desc">Sent once after onboarding completes</span>
+                  </div>
+                  <span
+                    class="status-pill"
+                    :class="welcomeEmailSent ? 'status-sent' : 'status-pending'"
+                  >
+                    {{ welcomeEmailSent ? '✅ Sent' : 'Pending' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Operational Alerts -->
+              <div class="settings-card">
+                <h3 class="card-title">Operational Alerts</h3>
+
+                <div class="notif-row">
+                  <div>
+                    <span class="notif-icon">⚠️</span>
+                    <span class="notif-label">Low Stock Alerts</span>
+                    <span class="notif-desc"
+                      >Sent to shop owner and managers daily when products run low</span
+                    >
+                  </div>
+                  <button
+                    class="toggle-btn"
+                    :class="{ active: emailPreferences.lowStockAlerts }"
+                    @click="emailPreferences.lowStockAlerts = !emailPreferences.lowStockAlerts"
+                  >
+                    <span class="toggle-knob" />
+                  </button>
+                </div>
+
+                <div class="card-footer">
+                  <Button
+                    label="Save Preferences"
+                    icon="pi pi-check"
+                    :loading="savingNotifications"
+                    @click="saveEmailPreferences"
+                  />
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+
+          <!-- ── Tab 7: Audit Log ── -->
+          <TabPanel value="6">
             <div class="tab-content" @vue:mounted="onAuditTabOpen">
               <!-- Summary Cards -->
               <div class="audit-summary-grid">
@@ -1455,60 +1710,66 @@ onMounted(() => {
 
     <!-- Configure Dialog -->
     <Dialog
-      v-model:visible="showConfigureDialog"
-      header="Configure Plugin"
-      :style="{ width: '500px' }"
-      modal
-    >
-      <div class="config-form" v-if="pluginConfig">
-        <div class="config-section">
-          <h4 class="config-label">Sizes</h4>
-          <div class="tag-list">
-            <span v-for="size in pluginConfig.sizes" :key="size" class="config-tag">
-              {{ size }}
-              <button class="tag-remove" @click="removeSize(size)">×</button>
-            </span>
-          </div>
-          <div class="tag-add-row">
-            <InputText
-              v-model="newSize"
-              placeholder="Add size (e.g. XXS)"
-              class="tag-input"
-              @keyup.enter="addSize"
-            />
-            <Button label="Add" size="small" severity="secondary" @click="addSize" />
-          </div>
-        </div>
+  v-model:visible="showConfigureDialog"
+  header="Configure Plugin"
+  :style="{ width: '520px' }"
+  modal
+>
+  <div class="config-form" v-if="pluginConfig">
+    <div v-for="(attr, idx) in pluginConfig.attributes" :key="idx" class="attribute-block">
+      <div class="attribute-block-header">
+        <span class="config-label">Attribute {{ idx + 1 }}</span>
+        <Button icon="pi pi-trash" size="small" severity="danger" text @click="removeAttribute(idx)" />
+      </div>
 
-        <div class="config-section">
-          <h4 class="config-label">Colors</h4>
-          <div class="tag-list">
-            <span v-for="color in pluginConfig.colors" :key="color" class="config-tag">
-              {{ color }}
-              <button class="tag-remove" @click="removeColor(color)">×</button>
-            </span>
-          </div>
-          <div class="tag-add-row">
-            <InputText
-              v-model="newColor"
-              placeholder="Add color (e.g. Purple)"
-              class="tag-input"
-              @keyup.enter="addColor"
-            />
-            <Button label="Add" size="small" severity="secondary" @click="addColor" />
-          </div>
+      <div class="field">
+        <label>Name</label>
+        <InputText v-model="attr.name" placeholder="e.g. Volume" class="w-full" />
+      </div>
+
+      <div class="field">
+        <label>Options</label>
+        <div class="tag-list">
+          <span v-for="option in attr.options" :key="option" class="config-tag">
+            {{ option }}
+            <button class="tag-remove" @click="removeOption(idx, option)">×</button>
+          </span>
+        </div>
+        <div class="tag-add-row">
+          <InputText
+            v-model="newOptionInputs[idx]"
+            placeholder="Add option"
+            class="tag-input"
+            @keyup.enter="addOption(idx)"
+          />
+          <Button label="Add" size="small" severity="secondary" @click="addOption(idx)" />
         </div>
       </div>
-      <template #footer>
-        <Button label="Cancel" severity="secondary" @click="showConfigureDialog = false" />
-        <Button
-          label="Save Configuration"
-          icon="pi pi-check"
-          :loading="savingConfig"
-          @click="saveConfig"
-        />
-      </template>
-    </Dialog>
+    </div>
+
+    <Button
+      label="Add Another Attribute"
+      icon="pi pi-plus"
+      severity="secondary"
+      class="w-full"
+      @click="addAttribute"
+    />
+
+    <div v-if="pluginConfig.attributes.length === 0" class="empty-attributes">
+      <i class="pi pi-info-circle" />
+      <span>No attributes yet. Add one to start tracking variants.</span>
+    </div>
+  </div>
+  <template #footer>
+    <Button label="Cancel" severity="secondary" @click="showConfigureDialog = false" />
+    <Button
+      label="Save Configuration"
+      icon="pi pi-check"
+      :loading="savingConfig"
+      @click="saveConfig"
+    />
+  </template>
+</Dialog>
   </div>
 </template>
 
@@ -1910,6 +2171,32 @@ onMounted(() => {
 .plugin-version {
   font-size: 0.75rem;
   color: #64748b;
+}
+
+.plugin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plugin-section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #465974;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #334155;
+}
+
+.plugin-section:first-child .plugin-section-title {
+  border-top: none;
+  padding-top: 0;
+}
+
+.plugin-section-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: -0.5rem 0 0;
 }
 
 .status-badge {
@@ -2324,5 +2611,79 @@ onMounted(() => {
 .audit-page-indicator {
   font-size: 0.8rem;
   color: #94a3b8;
+}
+
+/* ── Notifications ── */
+.notif-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #334155;
+}
+
+.notif-row:last-of-type {
+  border-bottom: none;
+}
+
+.notif-icon {
+  margin-right: 0.5rem;
+}
+
+.notif-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: block;
+}
+
+.notif-desc {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.status-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.status-sent {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.status-pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.attribute-block {
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.attribute-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.empty-attributes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: #64748b;
+  font-size: 0.875rem;
 }
 </style>

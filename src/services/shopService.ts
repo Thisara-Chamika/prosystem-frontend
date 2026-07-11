@@ -9,20 +9,13 @@ const shopService = {
   },
 
   // PUT /api/shops/business-type
-  async setBusinessType(businessType: string): Promise<ApiResponse<Shop>> {
+  async setBusinessType(businessType: string): Promise<
+    ApiResponse<{
+      businessType: string
+      autoInstalledPlugins: string[]
+    }>
+  > {
     const response = await api.put('/api/shops/business-type', { businessType })
-    return response.data
-  },
-
-  // GET /api/shops/available-plugins
-  async getAvailablePlugins(): Promise<any> {
-    const response = await api.get('/api/shops/available-plugins')
-    return response.data
-  },
-
-  // PUT /api/shops/plugins
-  async togglePlugin(plugin: string, action: 'add' | 'remove'): Promise<any> {
-    const response = await api.put('/api/shops/plugins', { plugin, action })
     return response.data
   },
 
@@ -59,6 +52,23 @@ const shopService = {
     }
   }): Promise<any> {
     const response = await api.put('/api/shops/settings', data)
+    return response.data
+  },
+
+  // GET /api/shops/email-preferences
+  async getEmailPreferences(): Promise<any> {
+    const response = await api.get('/api/shops/email-preferences')
+    return response.data
+  },
+
+  // PUT /api/shops/email-preferences
+  async updateEmailPreferences(data: {
+    receiptEmails?: boolean
+    customerWelcomeEmails?: boolean
+    staffWelcomeEmail?: boolean
+    lowStockAlerts?: boolean
+  }): Promise<any> {
+    const response = await api.put('/api/shops/email-preferences', data)
     return response.data
   },
 }

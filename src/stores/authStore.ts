@@ -160,6 +160,10 @@ export const useAuthStore = defineStore('auth', () => {
     return shop.value?.activePlugins?.includes(pluginId) ?? false
   }
 
+  function isBusinessType(type: string): boolean {
+    return shop.value?.businessType === type
+  }
+
   // ─── RETURN ───────────────────────────────────────────
   return {
     user,
@@ -173,6 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
     formatCurrency,
     formatDate,
     hasPlugin,
+    isBusinessType,
     login,
     register,
     fetchCurrentUser,
