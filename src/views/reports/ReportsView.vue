@@ -10,6 +10,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
+import RevenueTrendsTab from './tabs/RevenueTrendsTab.vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -491,15 +492,9 @@ onMounted(() => {
             </div>
           </template>
         </TabPanel>
-
-        <!-- ══════════════ Placeholders — filled in one at a time ══════════════ -->
+        <!-- ══════════════ REVENUE TRENDS (new tab) ══════════════ -->
         <TabPanel value="revenue-trends">
-          <div class="chart-card">
-            <div class="empty-chart">
-              <i class="pi pi-hourglass" />
-              <p>Revenue Trends — coming in the next step</p>
-            </div>
-          </div>
+          <RevenueTrendsTab />
         </TabPanel>
 
         <TabPanel value="customers">
