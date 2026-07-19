@@ -10,6 +10,11 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import Tab from 'primevue/tab'
+import TabPanels from 'primevue/tabpanels'
+import TabPanel from 'primevue/tabpanel'
 
 import { Line, Doughnut } from 'vue-chartjs'
 import {
@@ -48,6 +53,7 @@ if (authStore.userRole === 'cashier') {
 
 // ── State ─────────────────────────────────────────
 const loading = ref(false)
+const activeTab = ref('overview')
 
 const selectedPeriod = ref('today')
 const fromDate = ref('')
@@ -273,7 +279,7 @@ onMounted(() => {
         <h1 class="page-title">Reports</h1>
         <p class="page-subtitle">Analyse your shop performance</p>
       </div>
-      <div class="export-buttons">
+      <div class="export-buttons" v-if="activeTab === 'overview'">
         <Button
           label="Export CSV"
           icon="pi pi-download"
@@ -291,178 +297,239 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Period Selector -->
-    <div class="period-selector">
-      <Select
-        v-model="selectedPeriod"
-        :options="periodOptions"
-        optionLabel="label"
-        optionValue="value"
-        class="period-select"
-        @change="onPeriodChange"
-      />
-      <template v-if="selectedPeriod === 'custom'">
-        <input type="date" v-model="fromDate" class="date-input" />
-        <span class="date-sep">to</span>
-        <input type="date" v-model="toDate" class="date-input" />
-        <Button label="Apply" icon="pi pi-check" size="small" @click="loadReports" />
-      </template>
-      <Button
-        icon="pi pi-refresh"
-        severity="secondary"
-        size="small"
-        :loading="loading"
-        @click="loadReports"
-      />
-    </div>
+    <Tabs v-model:value="activeTab" lazy>
+      <TabList>
+        <Tab value="overview">Overview</Tab>
+        <Tab value="revenue-trends">Revenue Trends</Tab>
+        <Tab value="customers">Customers</Tab>
+        <Tab value="inventory">Inventory</Tab>
+        <Tab value="returns">Returns</Tab>
+      </TabList>
 
-    <!-- Loading skeleton -->
-    <div class="skeleton-grid" v-if="loading">
-      <div class="skeleton-card" v-for="i in 5" :key="i" />
-    </div>
-
-    <template v-else>
-      <!-- ── Section 1: Summary Cards ── -->
-      <div class="summary-grid">
-        <div class="summary-card blue">
-          <div class="summary-icon"><i class="pi pi-dollar" /></div>
-          <div class="summary-info">
-            <span class="summary-value">{{
-              authStore.formatCurrency(summary?.todayRevenue ?? 0)
-            }}</span>
-            <span class="summary-label">Total Revenue</span>
-            <div class="summary-change" :class="getChangeClass(summary?.revenueChange ?? 0)">
-              <i :class="getChangeIcon(summary?.revenueChange ?? 0)" />
-              <span>{{ Math.abs(summary?.revenueChange ?? 0).toFixed(1) }}%</span>
-            </div>
+      <TabPanels>
+        <!-- ══════════════ OVERVIEW (existing, unchanged) ══════════════ -->
+        <TabPanel value="overview">
+          <!-- Period Selector -->
+          <div class="period-selector">
+            <Select
+              v-model="selectedPeriod"
+              :options="periodOptions"
+              optionLabel="label"
+              optionValue="value"
+              class="period-select"
+              @change="onPeriodChange"
+            />
+            <template v-if="selectedPeriod === 'custom'">
+              <input type="date" v-model="fromDate" class="date-input" />
+              <span class="date-sep">to</span>
+              <input type="date" v-model="toDate" class="date-input" />
+              <Button label="Apply" icon="pi pi-check" size="small" @click="loadReports" />
+            </template>
+            <Button
+              icon="pi pi-refresh"
+              severity="secondary"
+              size="small"
+              :loading="loading"
+              @click="loadReports"
+            />
           </div>
-        </div>
 
-        <div class="summary-card purple">
-          <div class="summary-icon"><i class="pi pi-receipt" /></div>
-          <div class="summary-info">
-            <span class="summary-value">{{ summary?.todayTransactions ?? 0 }}</span>
-            <span class="summary-label">Transactions</span>
-            <div class="summary-change" :class="getChangeClass(summary?.transactionChange ?? 0)">
-              <i :class="getChangeIcon(summary?.transactionChange ?? 0)" />
-              <span>{{ Math.abs(summary?.transactionChange ?? 0).toFixed(1) }}%</span>
-            </div>
+          <!-- Loading skeleton -->
+          <div class="skeleton-grid" v-if="loading">
+            <div class="skeleton-card" v-for="i in 5" :key="i" />
           </div>
-        </div>
 
-        <div class="summary-card teal">
-          <div class="summary-icon"><i class="pi pi-chart-bar" /></div>
-          <div class="summary-info">
-            <span class="summary-value">{{
-              authStore.formatCurrency(summary?.averageTicket ?? 0)
-            }}</span>
-            <span class="summary-label">Avg Ticket</span>
-          </div>
-        </div>
-
-        <div class="summary-card green">
-          <div class="summary-icon"><i class="pi pi-percentage" /></div>
-          <div class="summary-info">
-            <span class="summary-value">{{
-              authStore.formatCurrency(summary?.totalTax ?? 0)
-            }}</span>
-            <span class="summary-label">Total Tax</span>
-          </div>
-        </div>
-
-        <div class="summary-card orange">
-          <div class="summary-icon"><i class="pi pi-tag" /></div>
-          <div class="summary-info">
-            <span class="summary-value">{{
-              authStore.formatCurrency(summary?.totalDiscount ?? 0)
-            }}</span>
-            <span class="summary-label">Total Discount</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Section 2: Revenue Chart ── -->
-      <div class="chart-card">
-        <h3 class="card-title">Revenue Over Time</h3>
-        <div class="empty-chart" v-if="dailySales.length === 0">
-          <i class="pi pi-chart-line" />
-          <p>No sales data for this period</p>
-        </div>
-        <div class="chart-wrapper" v-else style="height: 250px">
-          <Line :data="lineChartData" :options="lineChartOptions" />
-        </div>
-      </div>
-
-      <!-- ── Section 3: Two columns ── -->
-      <div class="two-col">
-        <!-- Top Products -->
-        <div class="chart-card">
-          <h3 class="card-title">Top Products</h3>
-          <div class="empty-chart" v-if="topProducts.length === 0">
-            <i class="pi pi-box" />
-            <p>No products sold in this period</p>
-          </div>
-          <DataTable v-else :value="topProducts" stripedRows tableStyle="min-width: 100%">
-            <Column field="productName" header="Product" />
-            <Column field="quantitySold" header="Sold" style="width: 15%" />
-            <Column header="Revenue" style="width: 30%">
-              <template #body="{ data }">
-                <span class="revenue-cell">{{ authStore.formatCurrency(data.revenue) }}</span>
-              </template>
-            </Column>
-          </DataTable>
-        </div>
-
-        <!-- Payment Methods -->
-        <div class="chart-card">
-          <h3 class="card-title">Payment Methods</h3>
-          <div class="empty-chart" v-if="paymentMethods.length === 0">
-            <i class="pi pi-credit-card" />
-            <p>No payment data for this period</p>
-          </div>
           <template v-else>
-            <div class="chart-wrapper" style="height: 200px">
-              <Doughnut :data="doughnutChartData" :options="doughnutChartOptions" />
-            </div>
-            <div class="payment-list">
-              <div v-for="(item, index) in paymentMethods" :key="item.method" class="payment-row">
-                <div
-                  class="payment-dot"
-                  :style="{ background: PIE_COLORS[index % PIE_COLORS.length] }"
-                />
-                <span class="payment-method-name">{{ item.method.toUpperCase() }}</span>
-                <span class="payment-count">{{ item.count }} txns</span>
-                <span class="payment-total">{{ authStore.formatCurrency(item.total) }}</span>
+            <!-- ── Section 1: Summary Cards ── -->
+            <div class="summary-grid">
+              <div class="summary-card blue">
+                <div class="summary-icon"><i class="pi pi-dollar" /></div>
+                <div class="summary-info">
+                  <span class="summary-value">{{
+                    authStore.formatCurrency(summary?.todayRevenue ?? 0)
+                  }}</span>
+                  <span class="summary-label">Total Revenue</span>
+                  <div class="summary-change" :class="getChangeClass(summary?.revenueChange ?? 0)">
+                    <i :class="getChangeIcon(summary?.revenueChange ?? 0)" />
+                    <span>{{ Math.abs(summary?.revenueChange ?? 0).toFixed(1) }}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="summary-card purple">
+                <div class="summary-icon"><i class="pi pi-receipt" /></div>
+                <div class="summary-info">
+                  <span class="summary-value">{{ summary?.todayTransactions ?? 0 }}</span>
+                  <span class="summary-label">Transactions</span>
+                  <div
+                    class="summary-change"
+                    :class="getChangeClass(summary?.transactionChange ?? 0)"
+                  >
+                    <i :class="getChangeIcon(summary?.transactionChange ?? 0)" />
+                    <span>{{ Math.abs(summary?.transactionChange ?? 0).toFixed(1) }}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="summary-card teal">
+                <div class="summary-icon"><i class="pi pi-chart-bar" /></div>
+                <div class="summary-info">
+                  <span class="summary-value">{{
+                    authStore.formatCurrency(summary?.averageTicket ?? 0)
+                  }}</span>
+                  <span class="summary-label">Avg Ticket</span>
+                </div>
+              </div>
+
+              <div class="summary-card green">
+                <div class="summary-icon"><i class="pi pi-percentage" /></div>
+                <div class="summary-info">
+                  <span class="summary-value">{{
+                    authStore.formatCurrency(summary?.totalTax ?? 0)
+                  }}</span>
+                  <span class="summary-label">Total Tax</span>
+                </div>
+              </div>
+
+              <div class="summary-card orange">
+                <div class="summary-icon"><i class="pi pi-tag" /></div>
+                <div class="summary-info">
+                  <span class="summary-value">{{
+                    authStore.formatCurrency(summary?.totalDiscount ?? 0)
+                  }}</span>
+                  <span class="summary-label">Total Discount</span>
+                </div>
               </div>
             </div>
-          </template>
-        </div>
-      </div>
 
-      <!-- ── Section 4: Cashier Performance ── -->
-      <div class="chart-card">
-        <h3 class="card-title">Cashier Performance</h3>
-        <div class="empty-chart" v-if="cashierSummary.length === 0">
-          <i class="pi pi-users" />
-          <p>No cashier data for this period</p>
-        </div>
-        <DataTable v-else :value="cashierSummary" stripedRows tableStyle="min-width: 100%">
-          <Column field="cashierName" header="Cashier" />
-          <Column field="totalTransactions" header="Transactions" style="width: 15%" />
-          <Column header="Avg Ticket" style="width: 20%">
-            <template #body="{ data }">
-              {{ authStore.formatCurrency(data.averageTicket) }}
-            </template>
-          </Column>
-          <Column field="totalReturns" header="Returns" style="width: 12%" />
-          <Column header="Revenue" style="width: 22%">
-            <template #body="{ data }">
-              <span class="revenue-cell">{{ authStore.formatCurrency(data.totalRevenue) }}</span>
-            </template>
-          </Column>
-        </DataTable>
-      </div>
-    </template>
+            <!-- ── Section 2: Revenue Chart ── -->
+            <div class="chart-card">
+              <h3 class="card-title">Revenue Over Time</h3>
+              <div class="empty-chart" v-if="dailySales.length === 0">
+                <i class="pi pi-chart-line" />
+                <p>No sales data for this period</p>
+              </div>
+              <div class="chart-wrapper" v-else style="height: 250px">
+                <Line :data="lineChartData" :options="lineChartOptions" />
+              </div>
+            </div>
+
+            <!-- ── Section 3: Two columns ── -->
+            <div class="two-col">
+              <!-- Top Products -->
+              <div class="chart-card">
+                <h3 class="card-title">Top Products</h3>
+                <div class="empty-chart" v-if="topProducts.length === 0">
+                  <i class="pi pi-box" />
+                  <p>No products sold in this period</p>
+                </div>
+                <DataTable v-else :value="topProducts" stripedRows tableStyle="min-width: 100%">
+                  <Column field="productName" header="Product" />
+                  <Column field="quantitySold" header="Sold" style="width: 15%" />
+                  <Column header="Revenue" style="width: 30%">
+                    <template #body="{ data }">
+                      <span class="revenue-cell">{{ authStore.formatCurrency(data.revenue) }}</span>
+                    </template>
+                  </Column>
+                </DataTable>
+              </div>
+
+              <!-- Payment Methods -->
+              <div class="chart-card">
+                <h3 class="card-title">Payment Methods</h3>
+                <div class="empty-chart" v-if="paymentMethods.length === 0">
+                  <i class="pi pi-credit-card" />
+                  <p>No payment data for this period</p>
+                </div>
+                <template v-else>
+                  <div class="chart-wrapper" style="height: 200px">
+                    <Doughnut :data="doughnutChartData" :options="doughnutChartOptions" />
+                  </div>
+                  <div class="payment-list">
+                    <div
+                      v-for="(item, index) in paymentMethods"
+                      :key="item.method"
+                      class="payment-row"
+                    >
+                      <div
+                        class="payment-dot"
+                        :style="{ background: PIE_COLORS[index % PIE_COLORS.length] }"
+                      />
+                      <span class="payment-method-name">{{ item.method.toUpperCase() }}</span>
+                      <span class="payment-count">{{ item.count }} txns</span>
+                      <span class="payment-total">{{ authStore.formatCurrency(item.total) }}</span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- ── Section 4: Cashier Performance ── -->
+            <div class="chart-card">
+              <h3 class="card-title">Cashier Performance</h3>
+              <div class="empty-chart" v-if="cashierSummary.length === 0">
+                <i class="pi pi-users" />
+                <p>No cashier data for this period</p>
+              </div>
+              <DataTable v-else :value="cashierSummary" stripedRows tableStyle="min-width: 100%">
+                <Column field="cashierName" header="Cashier" />
+                <Column field="totalTransactions" header="Transactions" style="width: 15%" />
+                <Column header="Avg Ticket" style="width: 20%">
+                  <template #body="{ data }">
+                    {{ authStore.formatCurrency(data.averageTicket) }}
+                  </template>
+                </Column>
+                <Column field="totalReturns" header="Returns" style="width: 12%" />
+                <Column header="Revenue" style="width: 22%">
+                  <template #body="{ data }">
+                    <span class="revenue-cell">{{
+                      authStore.formatCurrency(data.totalRevenue)
+                    }}</span>
+                  </template>
+                </Column>
+              </DataTable>
+            </div>
+          </template>
+        </TabPanel>
+
+        <!-- ══════════════ Placeholders — filled in one at a time ══════════════ -->
+        <TabPanel value="revenue-trends">
+          <div class="chart-card">
+            <div class="empty-chart">
+              <i class="pi pi-hourglass" />
+              <p>Revenue Trends — coming in the next step</p>
+            </div>
+          </div>
+        </TabPanel>
+
+        <TabPanel value="customers">
+          <div class="chart-card">
+            <div class="empty-chart">
+              <i class="pi pi-hourglass" />
+              <p>Customer Analytics — coming soon</p>
+            </div>
+          </div>
+        </TabPanel>
+
+        <TabPanel value="inventory">
+          <div class="chart-card">
+            <div class="empty-chart">
+              <i class="pi pi-hourglass" />
+              <p>Inventory Valuation — coming soon</p>
+            </div>
+          </div>
+        </TabPanel>
+
+        <TabPanel value="returns">
+          <div class="chart-card">
+            <div class="empty-chart">
+              <i class="pi pi-hourglass" />
+              <p>Returns Analysis — coming soon</p>
+            </div>
+          </div>
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
   </div>
 </template>
 
@@ -502,10 +569,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-}
-
-.period-select {
-  width: 160px;
+  margin-bottom: 1.5rem;
 }
 
 .date-input {
@@ -525,6 +589,10 @@ onMounted(() => {
 .date-sep {
   color: #64748b;
   font-size: 0.875rem;
+}
+
+.period-select {
+  width: 160px;
 }
 
 .skeleton-grid {
@@ -554,6 +622,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .summary-card {
@@ -628,11 +697,26 @@ onMounted(() => {
 .summary-value {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #f1f5f9;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.blue .summary-value {
+  color: #3b82f6;
+}
+.purple .summary-value {
+  color: #8b5cf6;
+}
+.teal .summary-value {
+  color: #14b8a6;
+}
+.green .summary-value {
+  color: #22c55e;
+}
+.orange .summary-value {
+  color: #f59e0b;
 }
 
 .summary-label {
@@ -666,6 +750,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .card-title {
@@ -704,6 +789,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .payment-list {
