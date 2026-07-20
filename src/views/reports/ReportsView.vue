@@ -12,6 +12,7 @@ import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import RevenueTrendsTab from './tabs/RevenueTrendsTab.vue'
 import CustomerAnalyticsTab from './tabs/CustomerAnalyticsTab.vue'
+import InventoryValuationTab from './tabs/InventoryValuationTab.vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -503,12 +504,7 @@ onMounted(() => {
         </TabPanel>
 
         <TabPanel value="inventory">
-          <div class="chart-card">
-            <div class="empty-chart">
-              <i class="pi pi-hourglass" />
-              <p>Inventory Valuation — coming soon</p>
-            </div>
-          </div>
+          <InventoryValuationTab />
         </TabPanel>
 
         <TabPanel value="returns">
