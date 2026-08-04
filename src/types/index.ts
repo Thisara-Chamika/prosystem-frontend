@@ -156,8 +156,11 @@ export interface CreateTransactionRequest {
   paymentMethod: 'cash' | 'card' | 'online' | 'mixed'
   discount?: number
   notes?: string
+  pointsToRedeem?: number
+  stripePaymentIntentId?: string
   items: {
     productId: string
+    variantId?: string
     quantity: number
     discount?: number
   }[]

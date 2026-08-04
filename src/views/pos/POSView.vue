@@ -11,6 +11,7 @@ import customerService from '../../services/customerService'
 import type { Customer, CreateCustomerRequest } from '../../types'
 import { useAuthStore } from '../../stores/authStore'
 import CashPaymentDialog from './CashPaymentDialog.vue'
+import CardPaymentDialog from './CardPaymentDialog.vue'
 import ReturnLookupPanel from './ReturnLookupPanel.vue'
 
 import InputText from 'primevue/inputtext'
@@ -46,6 +47,7 @@ const processingCheckout = ref(false)
 // ── Receipt Dialog ─────────────────────────────────
 const showReceipt = ref(false)
 const showCashDialog = ref(false)
+const showCardDialog = ref(false)
 const showReturnLookup = ref(false)
 
 const lastTransaction = ref<any>(null)
@@ -442,6 +444,36 @@ function clearCart() {
   redeemedPoints.value = 0
 }
 
+// Everything except paymentMethod/stripePaymentIntentId — shared by Cash
+// (via processCheckout below) and Card (passed down as a prop, since
+// CardPaymentDialog needs to submit it itself — see conversation notes).
+const transactionRequestBase = computed(() => ({
+  customerId: selectedCustomer.value?.customerId ?? null,
+  discount: overallDiscount.value,
+  notes: notes.value || undefined,
+  ...(redeemedPoints.value > 0 ? { pointsToRedeem: redeemedPoints.value } : {}),
+  items: cart.value.map((item: any) => ({
+    productId: item.productId,
+    ...(item.variantId ? { variantId: item.variantId } : {}),
+    quantity: item.quantity,
+    discount: item.discount,
+  })),
+}))
+
+// ── Card Payment Dialog Props / Emits ─────────────
+function handleTransactionSuccess(data: any) {
+  lastTransaction.value = data
+  showReceipt.value = true
+  clearCart()
+  loadAllProducts()
+  toast.add({
+    severity: 'success',
+    summary: 'Success',
+    detail: `Transaction ${data.transaction.transactionNumber} completed!`,
+    life: 5000,
+  })
+}
+
 async function processCheckout() {
   if (cart.value.length === 0) {
     toast.add({
@@ -455,33 +487,9 @@ async function processCheckout() {
 
   processingCheckout.value = true
   try {
-    const request: any = {
-      customerId: selectedCustomer.value?.customerId ?? null,
-      paymentMethod: paymentMethod.value,
-      discount: overallDiscount.value,
-      notes: notes.value || undefined,
-      ...(redeemedPoints.value > 0 ? { pointsToRedeem: redeemedPoints.value } : {}),
-      items: cart.value.map((item: any) => ({
-        productId: item.productId,
-        ...(item.variantId ? { variantId: item.variantId } : {}),
-        quantity: item.quantity,
-        discount: item.discount,
-      })),
-    }
-
+    const request = { ...transactionRequestBase.value, paymentMethod: paymentMethod.value }
     const response = await posService.createTransaction(request)
-    if (response.success) {
-      lastTransaction.value = response.data
-      showReceipt.value = true
-      clearCart()
-      await loadAllProducts()
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: `Transaction ${response.data.transaction.transactionNumber} completed!`,
-        life: 5000,
-      })
-    }
+    if (response.success) handleTransactionSuccess(response.data)
   } catch (error: any) {
     toast.add({
       severity: 'error',
@@ -492,6 +500,11 @@ async function processCheckout() {
   } finally {
     processingCheckout.value = false
   }
+}
+
+function onCardPaymentSuccess(data: any) {
+  showCardDialog.value = false
+  handleTransactionSuccess(data)
 }
 
 // ── Customer Methods ───────────────────────────────
@@ -603,6 +616,8 @@ function handlePayment() {
   }
   if (paymentMethod.value === 'cash') {
     showCashDialog.value = true
+  } else if (paymentMethod.value === 'card') {
+    showCardDialog.value = true
   } else {
     processCheckout()
   }
@@ -1062,6 +1077,14 @@ onMounted(() => {
       v-model:visible="showCashDialog"
       :totalAmount="totalAmount"
       @confirm="processCheckout"
+    />
+
+    <!-- Card Payment Dialog -->
+    <CardPaymentDialog
+      v-model:visible="showCardDialog"
+      :totalAmount="totalAmount"
+      :transactionRequest="transactionRequestBase"
+      @success="onCardPaymentSuccess"
     />
 
     <!-- Return Lookup Panel -->
