@@ -16,6 +16,18 @@ const authService = {
     localStorage.removeItem('token')
   },
 
+  // POST /api/auth/forgot-password
+  async forgotPassword(email: string): Promise<ApiResponse<null>> {
+    const response = await api.post<ApiResponse<null>>('/api/auth/forgot-password', { email })
+    return response.data
+  },
+
+  // POST /api/auth/reset-password
+  async resetPassword(data: { token: string; newPassword: string }): Promise<ApiResponse<null>> {
+    const response = await api.post<ApiResponse<null>>('/api/auth/reset-password', data)
+    return response.data
+  },
+
   // POST /api/auth/register
   async register(data: {
     shopName: string
