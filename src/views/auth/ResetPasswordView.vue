@@ -40,6 +40,7 @@ onMounted(() => {
   if (typeof t === 'string' && t.length > 0) {
     token.value = t
     hasToken.value = true
+    router.replace({ path: '/reset-password' })
   }
 })
 
