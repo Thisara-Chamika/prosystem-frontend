@@ -107,6 +107,16 @@ const router = createRouter({
           name: 'customer-profile',
           component: () => import('../views/customers/profile/CustomerProfileView.vue'),
         },
+        {
+          path: 'tables',
+          name: 'tables',
+          component: () => import('../views/tables/TablesView.vue'),
+        },
+        {
+          path: 'tables/:tableId/order',
+          name: 'table-order',
+          component: () => import('../views/tables/OrderBuildingView.vue'),
+        },
       ],
     },
 
@@ -144,6 +154,14 @@ router.beforeEach(async (to, _from) => {
     if (role !== 'shop_owner' && role !== 'shop_manager') {
       return { name: 'dashboard' }
     }
+  }
+
+  if (to.name === 'tables' || to.name === 'table-order') {
+    const hasPlugin = authStore.shop?.activePlugins?.includes('table-management') ?? false
+    if (!hasPlugin) {
+      return { name: 'dashboard' }
+    }
+    // No role check here, deliberately — all roles can use table management
   }
 })
 

@@ -17,6 +17,10 @@ const menuItems = computed(() => {
     { label: 'Inventory', icon: 'pi pi-warehouse', route: '/inventory' },
   ]
 
+  if (authStore.hasPlugin('table-management')) {
+    items.push({ label: 'Tables', icon: 'pi pi-th-large', route: '/tables' })
+  }
+
   if (role === 'shop_owner' || role === 'shop_manager') {
     items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
     items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })
