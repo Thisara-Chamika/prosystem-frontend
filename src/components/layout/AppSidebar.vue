@@ -21,6 +21,10 @@ const menuItems = computed(() => {
     items.push({ label: 'Tables', icon: 'pi pi-th-large', route: '/tables' })
   }
 
+  if (authStore.hasPlugin('kitchen-display')) {
+    items.push({ label: 'Kitchen', icon: 'pi pi-clock', route: '/kitchen' })
+  }
+
   if (role === 'shop_owner' || role === 'shop_manager') {
     items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
     items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })

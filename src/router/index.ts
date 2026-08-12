@@ -117,6 +117,11 @@ const router = createRouter({
           name: 'table-order',
           component: () => import('../views/tables/OrderBuildingView.vue'),
         },
+        {
+          path: 'kitchen',
+          name: 'kitchen',
+          component: () => import('../views/kitchen/KitchenDisplayView.vue'),
+        },
       ],
     },
 
@@ -162,6 +167,14 @@ router.beforeEach(async (to, _from) => {
       return { name: 'dashboard' }
     }
     // No role check here, deliberately — all roles can use table management
+  }
+
+  if (to.name === 'kitchen') {
+    const hasPlugin = authStore.shop?.activePlugins?.includes('kitchen-display') ?? false
+    if (!hasPlugin) {
+      return { name: 'dashboard' }
+    }
+    // No role check — same reasoning as table-management
   }
 })
 
