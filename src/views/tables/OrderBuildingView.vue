@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore'
 import tableService from '../../services/tableService'
 import productService from '../../services/productService'
 import inventoryService from '../../services/inventoryService'
+import RequestBillDialog from './RequestBillDialog.vue'
 
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
@@ -202,14 +203,22 @@ async function sendToKitchen() {
   }
 }
 
+const showBillDialog = ref(false)
+const showReceiptDialog = ref(false)
+const lastCheckout = ref<any>(null)
+
 function requestBill() {
-  // Checkout screen is Part 4 — not built yet.
-  toast.add({
-    severity: 'info',
-    summary: 'Coming soon',
-    detail: 'Checkout arrives in Part 4',
-    life: 2500,
-  })
+  showBillDialog.value = true
+}
+
+function onCheckoutSuccess(data: any) {
+  lastCheckout.value = data
+  showReceiptDialog.value = true
+}
+
+function closeReceiptAndReturn() {
+  showReceiptDialog.value = false
+  router.push('/tables')
 }
 
 onMounted(() => {
@@ -336,6 +345,67 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Request Bill dialog -->
+    <RequestBillDialog
+      v-model:visible="showBillDialog"
+      :order="order"
+      :tableNumber="table?.tableNumber ?? ''"
+      @success="onCheckoutSuccess"
+    />
+
+    <!-- Receipt dialog -->
+    <Dialog
+      v-model:visible="showReceiptDialog"
+      header="Order Complete"
+      :style="{ width: '420px' }"
+      modal
+      :closable="false"
+    >
+      <div class="receipt" v-if="lastCheckout">
+        <div class="receipt-header">
+          <i class="pi pi-check-circle receipt-icon" />
+          <h3>Payment Successful!</h3>
+          <p class="txn-number">{{ lastCheckout.transaction.transactionNumber }}</p>
+        </div>
+        <div class="receipt-items">
+          <div
+            v-for="item in lastCheckout.items"
+            :key="item.itemId ?? item.productName"
+            class="receipt-item"
+          >
+            <span>{{ item.productName }} x{{ item.quantity }}</span>
+            <span>{{ authStore.formatCurrency(parseFloat(item.total)) }}</span>
+          </div>
+        </div>
+        <div class="receipt-totals">
+          <div class="receipt-row">
+            <span>Subtotal</span>
+            <span>{{
+              authStore.formatCurrency(parseFloat(lastCheckout.transaction.subtotal))
+            }}</span>
+          </div>
+          <div class="receipt-row">
+            <span>Tax</span>
+            <span>{{ authStore.formatCurrency(parseFloat(lastCheckout.transaction.tax)) }}</span>
+          </div>
+          <div class="receipt-row grand">
+            <span>Total Paid</span>
+            <span>{{ authStore.formatCurrency(parseFloat(lastCheckout.transaction.total)) }}</span>
+          </div>
+          <div class="receipt-row">
+            <span>Payment Method</span>
+            <span>{{ lastCheckout.transaction.paymentMethod.toUpperCase() }}</span>
+          </div>
+          <div class="receipt-row" v-if="lastCheckout.amountPerPerson">
+            <span>Split ({{ lastCheckout.splitCount }} people)</span>
+            <span>{{ authStore.formatCurrency(lastCheckout.amountPerPerson) }} each</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Back to Tables" icon="pi pi-arrow-left" @click="closeReceiptAndReturn" />
+      </template>
+    </Dialog>
     <!-- Add item dialog -->
     <Dialog
       v-model:visible="showAddDialog"
@@ -590,5 +660,62 @@ onMounted(() => {
 
 .w-full {
   width: 100% !important;
+}
+
+.receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.receipt-header {
+  text-align: center;
+  padding: 1rem 0;
+}
+.receipt-icon {
+  font-size: 3rem;
+  color: #22c55e;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+.receipt-header h3 {
+  margin: 0 0 0.25rem;
+  color: #f1f5f9;
+}
+.txn-number {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  margin: 0;
+}
+.receipt-items {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.receipt-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #cbd5e1;
+}
+.receipt-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+.receipt-row.grand {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  padding-top: 0.5rem;
+  border-top: 1px solid #334155;
 }
 </style>

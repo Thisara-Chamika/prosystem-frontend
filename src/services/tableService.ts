@@ -46,6 +46,22 @@ const tableService = {
     )
     return response.data
   },
+
+  async checkoutOrder(
+    orderId: string,
+    data: {
+      paymentMethod: 'cash' | 'card' | 'online' | 'mixed'
+      stripePaymentIntentId?: string
+      discount?: number
+      splitCount?: number
+    },
+  ): Promise<any> {
+    const response = await api.post(
+      `/api/plugins/table-management/orders/${orderId}/checkout`,
+      data,
+    )
+    return response.data
+  },
 }
 
 export default tableService
