@@ -71,6 +71,9 @@ async function handleLogin() {
           />
         </div>
 
+        <!-- Forgot password link -->
+        <p class="forgot-link" @click="router.push('/forgot-password')">Forgot password?</p>
+
         <!-- Login button -->
         <Button
           type="button"
@@ -194,6 +197,18 @@ async function handleLogin() {
 }
 
 .signup-link:hover {
+  text-decoration: underline;
+}
+
+.forgot-link {
+  text-align: right;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin: -0.75rem 0 0;
+}
+
+.forgot-link:hover {
   text-decoration: underline;
 }
 

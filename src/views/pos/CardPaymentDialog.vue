@@ -3,17 +3,15 @@ import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
 import { useStripe } from '../../composables/useStripe'
 import paymentService from '../../services/paymentService'
-import posService from '../../services/posService'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import type { CreateTransactionRequest } from '../../types'
 
 const authStore = useAuthStore()
 
 const props = defineProps<{
   visible: boolean
   totalAmount: number
-  transactionRequest: Omit<CreateTransactionRequest, 'paymentMethod' | 'stripePaymentIntentId'>
+  submitPayment: (stripePaymentIntentId: string) => Promise<any>
 }>()
 
 const emit = defineEmits<{
@@ -117,13 +115,12 @@ async function handleCharge() {
 
     // Step 3 — the card IS charged at this point. A failure from here on needs
     // very different messaging than steps 1-2, because money already moved.
+    // submitPayment is provided by whoever opened this dialog — regular POS
+    // hits /api/pos, the restaurant checkout hits its own endpoint. This
+    // dialog only knows "call this with the intent ID," nothing more.
     try {
-      const saleRes = await posService.createTransaction({
-        ...props.transactionRequest,
-        paymentMethod: 'card',
-        stripePaymentIntentId: result.paymentIntent.id,
-      })
-      emit('success', saleRes.data)
+      const data = await props.submitPayment(result.paymentIntent.id)
+      emit('success', data)
     } catch (posError: any) {
       const msg = posError.response?.data?.message ?? ''
       errorMessage.value = msg.includes('automatically refunded')

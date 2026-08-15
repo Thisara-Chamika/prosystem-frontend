@@ -1083,7 +1083,12 @@ onMounted(() => {
     <CardPaymentDialog
       v-model:visible="showCardDialog"
       :totalAmount="totalAmount"
-      :transactionRequest="transactionRequestBase"
+      :submitPayment="
+        (intentId: string) =>
+          posService
+            .createTransaction({ ...transactionRequestBase, paymentMethod: 'card', stripePaymentIntentId: intentId })
+            .then((r) => r.data)
+      "
       @success="onCardPaymentSuccess"
     />
 
