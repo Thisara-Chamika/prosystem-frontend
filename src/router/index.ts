@@ -109,6 +109,16 @@ const router = createRouter({
           component: () => import('../views/customers/profile/CustomerProfileView.vue'),
         },
         {
+          path: 'support',
+          name: 'support',
+          component: () => import('../views/support/SupportView.vue'),
+        },
+        {
+          path: 'support/:ticketId',
+          name: 'support-thread',
+          component: () => import('../views/support/SupportThreadView.vue'),
+        },
+        {
           path: 'tables',
           name: 'tables',
           component: () => import('../views/tables/TablesView.vue'),
