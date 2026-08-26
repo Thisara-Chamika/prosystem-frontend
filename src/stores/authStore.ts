@@ -60,14 +60,17 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = response.data.user
         localStorage.setItem('token', response.data.token)
 
-        // Load shop data after login
-        const shopResponse = await shopService.getShop()
-        if (shopResponse.success) {
-          shop.value = shopResponse.data
-          await loadLoyaltySettings()
+        if (response.data.user.role === 'super_admin') {
+          // No shopId exists for this role — nothing to fetch, don't try.
+          router.push('/admin/dashboard')
+        } else {
+          const shopResponse = await shopService.getShop()
+          if (shopResponse.success) {
+            shop.value = shopResponse.data
+            await loadLoyaltySettings()
+          }
+          router.push('/')
         }
-
-        router.push('/')
       } else {
         error.value = response.message
       }
@@ -125,6 +128,10 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authService.getMe()
       if (response.success) {
         user.value = response.data
+
+        if (response.data.role === 'super_admin') {
+          return // nothing shop-shaped exists to load for this role
+        }
 
         // Also load shop data
         const shopResponse = await shopService.getShop()

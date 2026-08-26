@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import AppLayout from '../components/layout/AppLayout.vue'
+import AdminLayout from '../components/layout/AdminLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -125,6 +126,20 @@ const router = createRouter({
       ],
     },
 
+    {
+      path: '/admin',
+      component: AdminLayout,
+      meta: { requiresAuth: true },
+      children: [
+        { path: '', redirect: '/admin/dashboard' },
+        {
+          path: 'dashboard',
+          name: 'admin-dashboard',
+          component: () => import('../views/admin/AdminDashboardView.vue'),
+        },
+      ],
+    },
+
     // Catch all
     {
       path: '/:pathMatch(.*)*',
@@ -146,6 +161,15 @@ router.beforeEach(async (to, _from) => {
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {
+    return { name: authStore.userRole === 'super_admin' ? 'admin-dashboard' : 'dashboard' }
+  }
+
+  // Redirect based on role and route
+  if (to.name === 'dashboard' && authStore.userRole === 'super_admin') {
+    return { name: 'admin-dashboard' }
+  }
+
+  if (to.path.startsWith('/admin') && authStore.userRole !== 'super_admin') {
     return { name: 'dashboard' }
   }
 

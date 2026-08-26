@@ -9,7 +9,7 @@ export interface ApiResponse<T> {
 // The logged-in user's info
 export interface User {
   userId: string
-  shopId: string
+  shopId: string | null
   email: string
   firstName: string
   lastName: string
