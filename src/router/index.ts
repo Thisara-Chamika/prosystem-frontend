@@ -142,6 +142,16 @@ const router = createRouter({
           name: 'admin-shops',
           component: () => import('../views/admin/AdminShopsView.vue'),
         },
+        {
+          path: 'support',
+          name: 'admin-support',
+          component: () => import('../views/admin/AdminSupportView.vue'),
+        },
+        {
+          path: 'support/:ticketId',
+          name: 'admin-support-thread',
+          component: () => import('../views/admin/AdminSupportThreadView.vue'),
+        },
       ],
     },
 
