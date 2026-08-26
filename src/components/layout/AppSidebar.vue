@@ -28,6 +28,7 @@ const menuItems = computed(() => {
   if (role === 'shop_owner' || role === 'shop_manager') {
     items.push({ label: 'Transactions', icon: 'pi pi-receipt', route: '/transactions' })
     items.push({ label: 'Reports', icon: 'pi pi-chart-bar', route: '/reports' })
+    items.push({ label: 'Support', icon: 'pi pi-ticket', route: '/support' })
 
     if (authStore.hasPlugin('product-variants')) {
       items.push({ label: 'Variants', icon: 'pi pi-palette', route: '/variants' })

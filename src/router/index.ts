@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import AppLayout from '../components/layout/AppLayout.vue'
+import AdminLayout from '../components/layout/AdminLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -108,6 +109,16 @@ const router = createRouter({
           component: () => import('../views/customers/profile/CustomerProfileView.vue'),
         },
         {
+          path: 'support',
+          name: 'support',
+          component: () => import('../views/support/SupportView.vue'),
+        },
+        {
+          path: 'support/:ticketId',
+          name: 'support-thread',
+          component: () => import('../views/support/SupportThreadView.vue'),
+        },
+        {
           path: 'tables',
           name: 'tables',
           component: () => import('../views/tables/TablesView.vue'),
@@ -121,6 +132,35 @@ const router = createRouter({
           path: 'kitchen',
           name: 'kitchen',
           component: () => import('../views/kitchen/KitchenDisplayView.vue'),
+        },
+      ],
+    },
+
+    {
+      path: '/admin',
+      component: AdminLayout,
+      meta: { requiresAuth: true },
+      children: [
+        { path: '', redirect: '/admin/dashboard' },
+        {
+          path: 'dashboard',
+          name: 'admin-dashboard',
+          component: () => import('../views/admin/AdminDashboardView.vue'),
+        },
+        {
+          path: 'shops',
+          name: 'admin-shops',
+          component: () => import('../views/admin/AdminShopsView.vue'),
+        },
+        {
+          path: 'support',
+          name: 'admin-support',
+          component: () => import('../views/admin/AdminSupportView.vue'),
+        },
+        {
+          path: 'support/:ticketId',
+          name: 'admin-support-thread',
+          component: () => import('../views/admin/AdminSupportThreadView.vue'),
         },
       ],
     },
@@ -146,6 +186,15 @@ router.beforeEach(async (to, _from) => {
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {
+    return { name: authStore.userRole === 'super_admin' ? 'admin-dashboard' : 'dashboard' }
+  }
+
+  // Redirect based on role and route
+  if (to.name === 'dashboard' && authStore.userRole === 'super_admin') {
+    return { name: 'admin-dashboard' }
+  }
+
+  if (to.path.startsWith('/admin') && authStore.userRole !== 'super_admin') {
     return { name: 'dashboard' }
   }
 
